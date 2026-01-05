@@ -1,0 +1,6 @@
+C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug/CMakeFiles/edit_cache.dir
+C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug/CMakeFiles/rebuild_cache.dir
+C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug/Phoenix/CMakeFiles/GenerateOptiXIR.dir
+C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug/Phoenix/CMakeFiles/executable.dir
+C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug/Phoenix/CMakeFiles/edit_cache.dir
+C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug/Phoenix/CMakeFiles/rebuild_cache.dir

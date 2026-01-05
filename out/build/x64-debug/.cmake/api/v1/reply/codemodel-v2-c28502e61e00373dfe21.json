@@ -1,0 +1,96 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1
+					],
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.8"
+					},
+					"projectIndex" : 0,
+					"source" : "."
+				},
+				{
+					"build" : "Phoenix",
+					"jsonFile" : "directory-Phoenix-Debug-2ce1268810be3a012121.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.18"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "Phoenix",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"childIndexes" : 
+					[
+						1
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "Phoenix"
+				},
+				{
+					"directoryIndexes" : 
+					[
+						1
+					],
+					"name" : "PhoenixApp",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 1,
+					"id" : "GenerateOptiXIR::@5ef7a1052783554dc860",
+					"jsonFile" : "target-GenerateOptiXIR-Debug-c06f911496c810701db0.json",
+					"name" : "GenerateOptiXIR",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 1,
+					"id" : "executable::@5ef7a1052783554dc860",
+					"jsonFile" : "target-executable-Debug-2b06f46f7580b686ba9c.json",
+					"name" : "executable",
+					"projectIndex" : 1
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/PC/Desktop/poc/Phoenix/out/build/x64-debug",
+		"source" : "C:/Users/PC/Desktop/poc/Phoenix"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 8
+	}
+}
