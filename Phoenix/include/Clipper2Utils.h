@@ -11,19 +11,11 @@ using namespace gdstk;
 using namespace Clipper2Lib;
 
 
-class Clipper2Operators
+namespace Clipper2Utils
 {
-private:
-
-public:
-	Clipper2Operators();
-
 	///* Fonction de sauvegarde *///
-	// utilisé dans la fonction ConvertGdstkPolygonsToPaths64
-	static void ThreadConversion(Library& lib, Paths64& paths, double factor, int k, int i_min, int i_max);
-
 	// convertit les polygones chargés avec gdstk en une suite de polygones Paths64 de clipper2
-	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib, double factor);
+	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree en polygones gdstk (avec trous)
 	void GetGdstkPolygonsFromClipper2Tree(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys);

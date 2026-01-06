@@ -53,6 +53,13 @@ struct GeometryInfo {
     }
 };
 
+
+struct Cell2
+{
+    Array<Polygon2*> polygon_array;
+};
+
+
 struct Cell {
     // NULL-terminated string with cell name.  The GDSII specification allows
     // only ASCII-encoded strings.  The OASIS specification restricts the

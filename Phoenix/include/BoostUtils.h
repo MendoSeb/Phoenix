@@ -11,13 +11,8 @@ using polygon_t = bg::model::polygon<point_t>;
 using multi_polygon_t = bg::model::multi_polygon<polygon_t>;
 
 
-class BoostOperators
+namespace BoostUtils
 {
-private:
-
-public:
-	BoostOperators();
-
 	multi_polygon_t ConvertGdstkToBoostPolygon(const Library& lib);
 
 	void ConvertBoostPolygonToGdstk(multi_polygon_t& polys, const char* fileName);
@@ -27,5 +22,4 @@ public:
 	void MakeDegraissement(int buffer_dist, const char* savePath);
 
 	void MakeDifference();
-
 };

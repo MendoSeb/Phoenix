@@ -16,6 +16,11 @@ LICENSE file or <http://www.boost.org/LICENSE_1_0.txt>
 
 namespace gdstk {
 
+    struct Point2
+    {
+        double x, y;
+    };
+
 // Basic 2d coordinate used to describe polygon vertices and points in general
 // throughout the library
 struct Vec2 {
@@ -167,7 +172,7 @@ inline Vec2 cplx_mul(const Vec2& z1, const Vec2& z2) {
 inline Vec2 cplx_inv(const Vec2& z) { return cplx_conj(z) / z.length_sq(); }
 
 inline Vec2 cplx_div(const Vec2& z1, const Vec2& z2) {
-    return cplx_mul(z1, cplx_conj(z2)) / z2.length_sq();
+    return cplx_mul(z1, cplx_conj(z2)) / z2.length_sq(); 
 }
 
 inline Vec2 cplx_from_angle(double angle) { return Vec2{cos(angle), sin(angle)}; }

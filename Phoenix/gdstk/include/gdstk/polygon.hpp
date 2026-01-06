@@ -23,6 +23,12 @@ LICENSE file or <http://www.boost.org/LICENSE_1_0.txt>
 
 namespace gdstk {
 
+
+    struct Polygon2
+    {
+        Array<Point2> point_array;
+    };
+
 struct Polygon {
     Tag tag;
     Array<Vec2> point_array;

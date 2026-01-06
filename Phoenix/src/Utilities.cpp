@@ -1,8 +1,11 @@
 #pragma once
+#include "Utilities.h"
+#include <GdstkUtils.h>
+
 
 namespace Utils
 {
-    std::vector<earcutLayer> Triangulation(std::vector<Library>& layers)
+    std::vector<earcutLayer> EarcutTriangulation(std::vector<Library>& layers)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         std::vector<earcutLayer> result;
@@ -59,6 +62,9 @@ namespace Utils
         std::ofstream file(filename);
         double min = INT_MAX;
         double max = INT_MIN;
+
+        earcutPoint test;
+        test[0] = 1.0;
 
         // trouver le min et max
         for (auto& layer : layers)
@@ -187,101 +193,6 @@ namespace Utils
     }
 
 
-    void repeatAndTranslate(Library& lib, uint64_t rep_x, uint64_t rep_y, double width, double height)
-    {
-        for (size_t i = 0; i < lib.cell_array.count; i++)
-            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
-            {
-                lib.cell_array[i]->polygon_array[k]->repetition = Repetition{
-                    RepetitionType::Rectangular,
-                    rep_x,
-                    rep_y,
-                    Vec2{width, height},
-                };
-            }
-    }
-
-
-    Paths64 RepeatAndTranslateClipper2(const Library& lib, uint64_t rep_x, uint64_t rep_y, double width, double height, double factor)
-    {
-        Paths64 final_path;
-        width *= factor; // pour déplacer les éléments selon leur scale
-        height *= factor;
-
-        for (size_t i = 0; i < lib.cell_array.count; i++)
-        {
-            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
-            {
-                Polygon* p = lib.cell_array[i]->polygon_array[k];
-                Path64 poly;
-                poly.resize(p->point_array.count);
-
-                // convert gdsii to paths64
-                for (size_t m = 0; m < p->point_array.count; m++)
-                    poly[m] = Point64(p->point_array[m].x * factor, p->point_array[m].y * factor);
-
-                // duplicate
-                for (size_t x = 0; x < rep_x; x++)
-                    for (size_t y = 0; y < rep_y; y++)
-                    {
-                        Path64 new_path = poly;
-
-                        for (Point64& point : new_path)
-                            point = point + Point64(x * width, y * height);
-
-                        final_path.push_back(new_path);
-                    }
-            }
-        }
-
-        std::cout << "Polygones dupliques en paths64" << std::endl;;
-        return final_path;
-    }
-
-    void ConvertToPolygon(Library& lib)
-    {
-        for (size_t i = 0; i < lib.cell_array.count; i++)
-        {
-            Cell* c = lib.cell_array[i];
-
-            /// flexpath
-            for (size_t k = 0; k < c->flexpath_array.count; k++)
-            {
-                FlexPath* fp = c->flexpath_array[k];
-
-                /// pour les cercles
-                if (fp->spine.point_array.count == 2
-                    && (fp->spine.point_array[0] == fp->spine.point_array[1]))
-                {
-                    double max_radius = std::max(fp->elements->half_width_and_offset[0].x, fp->elements->half_width_and_offset[0].y);
-
-                    gdstk::Polygon* circle = new gdstk::Polygon(gdstk::ellipse(
-                        fp->spine.point_array[0],
-                        max_radius,
-                        max_radius,
-                        0.0, 0.0,
-                        0.0, 0.0,
-                        1e-4, // précision de la discrétisation du cercle
-                        0
-                    ));
-
-                    c->polygon_array.append(circle);
-                    continue;
-                }
-            }
-
-            // transformer les flexpath en polygones
-            Array<FlexPath*> flexpath_array = lib.cell_array[i]->flexpath_array;
-
-            for (size_t m = 0; m < flexpath_array.count; m++)
-                flexpath_array[m]->to_polygons(false, 0, lib.cell_array[i]->polygon_array);
-
-            // destroy flexpath, they are now polygons
-            lib.cell_array[i]->flexpath_array.clear();
-        }
-    }
-
-
     // Découpe les polygones ayant plus de 8190 sommets en plusieurs polygones plus petits
     void MakeFracture(Library& lib)
     {
@@ -298,45 +209,5 @@ namespace Utils
                     std::cout << i << ", " << k << ": " << new_polys.count << std::endl;
             }
         }
-    }
-
-
-
-    Library LoadGDS(const char* fileName)
-    {
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-        Library lib = read_gds(fileName, 1e-6, 1e-9, nullptr, nullptr);
-        std::cout << "Unit: " << lib.unit << std::endl;
-        std::cout << "Precision: " << lib.precision << std::endl;
-        std::cout << "Nb cell: " << lib.cell_array.count << "\n\n";
-
-        for (size_t i = 0; i < lib.cell_array.count; i++)
-        {
-            std::cout << "cell: " << i << std::endl;
-            std::cout << "Polygones: " << lib.cell_array[i]->polygon_array.count << std::endl;
-            std::cout << "Reference: " << lib.cell_array[i]->reference_array.count << std::endl;
-            std::cout << "FlexPath: " << lib.cell_array[i]->flexpath_array.count << std::endl;
-            std::cout << "Robustpath: " << lib.cell_array[i]->robustpath_array.count << std::endl;
-            std::cout << std::endl;
-        }
-
-        ConvertToPolygon(lib);
-
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Fichier charge en polygones gdstk en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
-        return lib;
-    }
-
-
-    void SaveToGdsii(Library& lib, const char* fileName)
-    {
-        //MakeFracture(lib);
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-        lib.write_gds(fileName, INT32_MAX, NULL);
-
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Sauvegarde vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
     }
 }

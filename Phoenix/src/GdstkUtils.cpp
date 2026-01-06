@@ -1,0 +1,226 @@
+#include "GdstkUtils.h"
+#include <iostream>
+#include <__msvc_chrono.hpp>
+
+
+namespace GdstkUtils
+{
+    Library LoadGDS(const char* fileName)
+    {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        Library lib = read_gds(fileName, 1e-6, 1e-9, nullptr, nullptr);
+        std::cout << "Unit: " << lib.unit << std::endl;
+        std::cout << "Precision: " << lib.precision << std::endl;
+        std::cout << "Nb cell: " << lib.cell_array.count << "\n\n";
+
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            std::cout << "cell: " << i << std::endl;
+            std::cout << "Polygones: " << lib.cell_array[i]->polygon_array.count << std::endl;
+            std::cout << "Reference: " << lib.cell_array[i]->reference_array.count << std::endl;
+            std::cout << "FlexPath: " << lib.cell_array[i]->flexpath_array.count << std::endl;
+            std::cout << "Robustpath: " << lib.cell_array[i]->robustpath_array.count << std::endl;
+            std::cout << std::endl;
+        }
+
+        ConvertFlexPathsToPolygon(lib);
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Fichier charge en polygones gdstk en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        return lib;
+    }
+
+
+    void SaveToGdsii(Library& lib, const char* fileName)
+    {
+        //MakeFracture(lib);
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        lib.write_gds(fileName, INT32_MAX, NULL);
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Sauvegarde vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+    }
+
+
+    void ConvertFlexPathsToPolygon(Library& lib)
+    {
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            Cell* c = lib.cell_array[i];
+
+            /// flexpath
+            for (size_t k = 0; k < c->flexpath_array.count; k++)
+            {
+                FlexPath* fp = c->flexpath_array[k];
+
+                /// pour les cercles
+                if (fp->spine.point_array.count == 2
+                    && (fp->spine.point_array[0] == fp->spine.point_array[1]))
+                {
+                    double max_radius = std::max(fp->elements->half_width_and_offset[0].x, fp->elements->half_width_and_offset[0].y);
+
+                    gdstk::Polygon* circle = new gdstk::Polygon(gdstk::ellipse(
+                        fp->spine.point_array[0],
+                        max_radius,
+                        max_radius,
+                        0.0, 0.0,
+                        0.0, 0.0,
+                        1e-4, // précision de la discrétisation du cercle
+                        0
+                    ));
+
+                    c->polygon_array.append(circle);
+                    continue;
+                }
+            }
+
+            // transformer les flexpath en polygones
+            Array<FlexPath*> flexpath_array = lib.cell_array[i]->flexpath_array;
+
+            for (size_t m = 0; m < flexpath_array.count; m++)
+                flexpath_array[m]->to_polygons(false, 0, lib.cell_array[i]->polygon_array);
+
+            // destroy flexpath, they are now polygons
+            lib.cell_array[i]->flexpath_array.clear();
+        }
+    }
+
+
+    void RepeatAndTranslateGdstk(Library& lib, int rep_x, int rep_y, double width, double height)
+    {
+        Cell* cell = (Cell*)allocate_clear(sizeof(Cell));
+        cell->name = copy_string("FIRST", NULL);
+
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
+            {
+                Polygon* main_poly = lib.cell_array[i]->polygon_array[k];
+
+                // duplicate
+                for (size_t x = 0; x < rep_x; x++)
+                    for (size_t y = 0; y < rep_y; y++)
+                    {
+                        Polygon* new_poly = (Polygon*)allocate_clear(sizeof(Polygon));
+                        new_poly->point_array.copy_from(main_poly->point_array);
+                        new_poly->translate(Vec2{ x * width, y * height });
+                        cell->polygon_array.append(new_poly);
+                    }
+            }
+
+        lib.cell_array.clear();
+        lib.cell_array.append(cell);
+        std::cout << "Polygones dupliques en polygones gdstk" << std::endl;
+    }
+
+
+    void Normalize(Library& lib)
+    {
+        assert(lib.cell_array.count == 0);
+        double min = INT64_MAX;
+        double max = INT64_MIN;
+
+        // find minimum and maximum coordinate
+        for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+            for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+            {
+                Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
+                min = std::min(min, std::min(p.x, p.y));
+                max = std::max(max, std::max(p.x, p.y));
+            }
+
+        // normalize
+        for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+            for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+            {
+                Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
+                p.x = (((std::abs(min) + p.x) / (std::abs(min) + max)) * 2.0 - 1.0) * 1e5;
+                p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * 1e5;
+            }
+    }
+
+
+    Library MakeUnion(Library& lib)
+    {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        gdstk::Library out_lib = {};
+        out_lib.init("library", 1e-6, 1e-9);
+
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            Cell* out_cell = (Cell*)allocate_clear(sizeof(Cell));
+            out_cell->name = copy_string("cellule", NULL);
+
+            boolean(lib.cell_array[i]->polygon_array, out_cell->polygon_array, Operation::Or, 1e3, out_cell->polygon_array);
+            out_lib.cell_array.append(out_cell);
+        }
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Union faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
+        return out_lib;
+    }
+
+
+    Library MakeDegraissement(Library lib, double dist)
+    {
+        ;
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        gdstk::Library out_lib = {};
+        out_lib.init("library", 1e-6, 1e-9);
+
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            Cell* out_cell = (Cell*)allocate_clear(sizeof(Cell));
+            out_cell->name = copy_string("cellule", NULL);
+
+            // dégraissement
+            gdstk::offset(
+                lib.cell_array[i]->polygon_array,
+                dist,
+                OffsetJoin::Miter,
+                2,
+                1e3,
+                false,
+                out_cell->polygon_array
+            );
+
+            out_lib.cell_array.append(out_cell);
+        }
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Dégraissement fait en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
+        return out_lib;
+    }
+
+
+    Library MakeDifference(Library& lib1, Library& lib2)
+    {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        gdstk::Library out_lib = {};
+        out_lib.init("library", 1e-6, 1e-9);
+
+        assert(lib1.cell_array.count == lib2.cell_array.count);
+
+        for (size_t i = 0; i < lib1.cell_array.count; i++)
+        {
+            Cell* out_cell = (Cell*)allocate_clear(sizeof(Cell));
+            out_cell->name = copy_string("cellule", NULL);
+
+            boolean(
+                lib1.cell_array[i]->polygon_array,
+                lib2.cell_array[i]->polygon_array,
+                Operation::Not,
+                1e3,
+                out_cell->polygon_array
+            );
+
+            out_lib.cell_array.append(out_cell);
+        }
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Différence faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
+        return out_lib;
+    }
+}
