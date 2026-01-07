@@ -22,14 +22,14 @@ extern "C" __global__ void __raygen__rg() {
 
     // 2. Coordonnées normalisées dans l'espace de l'image (-1 à 1)
     float ratio = 4096.0f / 2176.0f;
-    float zoom = 1.0f;
+    float zoom = 0.0f;
 
     float u_normalized = (((float)x / (float)launch_dim_x * 2.0f - 1.0f) * ratio) / zoom;
     float v_normalized = (((float)y / (float)launch_dim_y * 2.0f - 1.0f)) / zoom;
 
     float3 ray_origin = float3{ u_normalized + params.cam_eye.x, v_normalized + params.cam_eye.y, params.cam_eye.z };
     //float3 ray_direction = params.cam_w + u_normalized * params.cam_u + v_normalized * params.cam_v;
-    float3 ray_direction = float3{ 0.0f, 0.0f, 1.0f };
+    float3 ray_direction = float3{ 0.0f, 0.0f, -1.0f };
 
     float t_min = 0.0f;
     float t_max = 1e16f;

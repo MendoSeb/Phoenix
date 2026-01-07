@@ -18,17 +18,17 @@ namespace Clipper2Utils
 	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree en polygones gdstk (avec trous)
-	void GetGdstkPolygonsFromClipper2Tree(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys);
+	void GetGdstkPolygonsFromClipper2Tree(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys, double epsilon);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree sous forme de couches
 	// (hauteur de l'arbre 0 = polygones pleins, 1 = trous, 2 = pleins etc...)
 	void GetTreeLayers(PolyTree64& node, int depth, std::vector<Paths64>& layers);
 
 	// Convertit des polygones Paths64 en polygones gdstk (Library)
-	Library ConvertPaths64ToGdsii(const Paths64& tree);
+	Library ConvertPaths64ToGdsii(const Paths64& polys, double epsilon);
 
 	// Convertit un polytree64 en une polygones gdstk (avec trous)
-	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output);
+	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output, double epsilon);
 
 	// convertit un polytree64 en polygones gdstk triés par couches
 	std::vector<Library> ConvertPolyTree64ToGdsiiLayers(PolyTree64& tree);
@@ -46,6 +46,9 @@ namespace Clipper2Utils
 	// Fait l'inverse des polygones actuels
 	void MakeInverse(const PolyTree64& tree, PolyTree64& output);
 
-	// Triangule les polygones de tree
-	void MakeTriangulation(const PolyTree64& tree, Library& output);
+	// Triangule les polygones d'un polytree64
+	void MakeTriangulationPolyTree(const PolyTree64& tree, Library& output);
+
+	// Triangule les polygones d'un paths64
+	void MakeTriangulationPaths(Paths64& paths, Library& output);
 };

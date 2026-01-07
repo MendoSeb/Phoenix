@@ -88,7 +88,7 @@ namespace Utils
                     {
                         point[0] = ((point[0] + std::abs(min)) / (std::abs(min) + max)) * 2.0 - 1.0;
                         point[1] = ((point[1] + std::abs(min)) / (std::abs(min) + max)) * 2.0 - 1.0;
-                        file << "v " << std::to_string(point[0]) << " " << std::to_string(point[1]) << " " << std::to_string(-i / 10.0) << "\n";
+                        file << "v " << std::to_string(point[0]) << " " << std::to_string(point[1]) << " " << std::to_string(i / 5.0) << "\n";
                     }
 
         // enregistrer les indices dans l'obj
@@ -121,6 +121,7 @@ namespace Utils
         }
 
         std::cout << "Nombre de triangles: " << nb_tris << std::endl;
+        std::cout << "Nombre de sommets: " << nb_vertex << std::endl;
         file.close();
     }
 
@@ -139,15 +140,12 @@ namespace Utils
 
                 for (size_t k = 0; k < poly->point_array.count; k++)
                 {
-                    double temp_min = std::min(poly->point_array[k].x, poly->point_array[k].y);
-                    double temp_max = std::max(poly->point_array[k].x, poly->point_array[k].y);
-
-                    if (temp_min < min) min = temp_min;
-                    if (temp_max > max) max = temp_max;
+                    min = std::min(min, std::min(poly->point_array[k].x, poly->point_array[k].y));
+                    max = std::max(max, std::max(poly->point_array[k].x, poly->point_array[k].y));
                 }
             }
 
-        // normaliser les sommet
+        // normaliser les sommets entre -1 et 1
         for (int m = 0; m < layers.size(); m++)
             for (size_t i = 0; i < layers[m].cell_array[0]->polygon_array.count; i++)
             {
@@ -177,9 +175,9 @@ namespace Utils
 
                 for (size_t k = 0; k < poly->point_array.count; k += 3)
                 {
-                    std::string i1 = std::to_string(layer_nb_vertex + poly_nb_vertex + +k + 1);
-                    std::string i2 = std::to_string(layer_nb_vertex + poly_nb_vertex + k + 1 + 1);
-                    std::string i3 = std::to_string(layer_nb_vertex + poly_nb_vertex + k + 2 + 1);
+                    std::string i1 = std::to_string(layer_nb_vertex + poly_nb_vertex + k + 1);
+                    std::string i2 = std::to_string(layer_nb_vertex + poly_nb_vertex + k + 2);
+                    std::string i3 = std::to_string(layer_nb_vertex + poly_nb_vertex + k + 3);
                     file << "f " << i1 << " " << i2 << " " << i3 << "\n";
                 }
 
@@ -190,24 +188,5 @@ namespace Utils
 
         std::cout << "Nombre de triangles: " << std::round(layer_nb_vertex / 3.0) << std::endl;
         file.close();
-    }
-
-
-    // Découpe les polygones ayant plus de 8190 sommets en plusieurs polygones plus petits
-    void MakeFracture(Library& lib)
-    {
-        for (size_t i = 0; i < lib.cell_array.count; i++)
-        {
-            Array<gdstk::Polygon*> new_polys = {};
-
-            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
-            {
-                gdstk::Polygon* poly = lib.cell_array[i]->polygon_array[k];
-                poly->fracture(8190, 1e-3, new_polys);
-
-                if (poly->point_array.count > 8190)
-                    std::cout << i << ", " << k << ": " << new_polys.count << std::endl;
-            }
-        }
     }
 }

@@ -117,7 +117,8 @@ namespace GdstkUtils
 
     void Normalize(Library& lib)
     {
-        assert(lib.cell_array.count == 0);
+        assert(lib.cell_array.count == 1);
+        double limit = 1e5;
         double min = INT64_MAX;
         double max = INT64_MIN;
 
@@ -135,9 +136,27 @@ namespace GdstkUtils
             for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
             {
                 Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
-                p.x = (((std::abs(min) + p.x) / (std::abs(min) + max)) * 2.0 - 1.0) * 1e5;
-                p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * 1e5;
+                p.x = (((std::abs(min) + p.x) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
+                p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
             }
+    }
+
+
+    void MakeFracture(Library& lib)
+    {
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            Array<gdstk::Polygon*> new_polys = {};
+
+            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
+            {
+                gdstk::Polygon* poly = lib.cell_array[i]->polygon_array[k];
+                poly->fracture(8190, 1e-3, new_polys);
+
+                if (poly->point_array.count > 8190)
+                    std::cout << i << ", " << k << ": " << new_polys.count << std::endl;
+            }
+        }
     }
 
 

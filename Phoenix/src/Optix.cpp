@@ -153,9 +153,7 @@ int Optix::init()
     ptx_file.seekg(0);
 
     std::string ptx_source(file_size, '\0');
-
     ptx_file.read(&ptx_source[0], file_size);
-
 
     // Crée un module 
     OPTIX_CHECK_LOG(optixModuleCreate(
@@ -255,12 +253,10 @@ CUdeviceptr Optix::initScene()
     float min = INT_MAX;
     float max = INT_MIN;
 
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/triangulation_full.obj", objVertices, objTriangles, d_list, min, max);
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/triangulation_layers.obj", objVertices, objTriangles, d_list, min, max);
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/triangulation_full_clipper2.obj", objVertices, objTriangles, d_list, min, max);
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/Untitled.obj", objVertices, objTriangles, d_list, min, max);
-    
-    loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_full_clipper2.obj", objVertices, objTriangles, d_list, min, max);
+    loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_clipper2.obj", objVertices, objTriangles, d_list, min, max);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj", objVertices, objTriangles, d_list, min, max);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_multi_couches_earcut.obj", objVertices, objTriangles, d_list, min, max);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_clipper2_multi_couche_v2.obj", objVertices, objTriangles, d_list, min, max);
 
     int numTriangle = objTriangles.size();
     int totalNumTriangle = numTriangle;
@@ -275,7 +271,7 @@ CUdeviceptr Optix::initScene()
     }
 
     const size_t vertices_size = sizeof(float3) * totalNumTriangle * 3;
-    std::cout << "nb triangles = " << totalNumTriangle << "    MemSize = " << (vertices_size / 1024 / 1024) << " Mo" << std::endl;
+    std::cout << "MemSize = " << (vertices_size / 1024 / 1024) << " Mo" << std::endl;
     CUdeviceptr d_vertices = 0;
     cudaMalloc(reinterpret_cast<void**>(&d_vertices), vertices_size);
     cudaMemcpy(
@@ -351,15 +347,15 @@ void Optix::render()
     params.cam_u = make_float3(0.828427136f, 0.0f, 0.0f);
     params.cam_v = make_float3(0.0f, 0.828427136, 0.0f);
     params.cam_w = make_float3(0.0f, 0.0f, 1.0f);
-    params.cam_eye = make_float3(0.0f, 0.0f, -1.0f);
-    //params.cam_eye = make_float3(0.25f, 0.25f, -1.0f);
+    params.cam_eye = make_float3(0.0f, 0.0f, 5.0f); // reculer assez car en multi couche c'est épais
+    //params.cam_eye = make_float3(0.3f, 0.24f, 5.0f);
 
     //creation d'un rendu
     CUdeviceptr d_param;
     cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
     cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
 
-    int nbIter = 1000;
+    int nbIter = 100000;
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < nbIter; i++)

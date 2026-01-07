@@ -52,7 +52,7 @@ struct MissData
     // No data needed
 };
 
-
+/* Contient les données pour chaque triangle */
 struct HitGroupData
 {
     // No data needed
@@ -65,8 +65,8 @@ struct Params
     unsigned char* image;
     unsigned int           image_width;
     unsigned int           image_height;
-    float3                 cam_eye;
-    float3                 cam_u, cam_v, cam_w;
+    float3                 cam_eye; // position de la caméra
+    float3                 cam_u, cam_v, cam_w; // orientation de la caméra
     OptixTraversableHandle handle;
 };
 
@@ -104,11 +104,6 @@ private:
     }
 };
 
-//------------------------------------------------------------------------------
-//
-// OptiX error-checking
-//
-//------------------------------------------------------------------------------
 
 #define OPTIX_CHECK( call )                                                    \
     optixCheck( call, #call, __FILE__, __LINE__ )
@@ -180,7 +175,7 @@ inline void optixCheckNoThrow(OptixResult res, const char* call, const char* fil
 class Optix
 {
 private:
-    int width, height;
+    int width, height; // dimension de l'image à calculer
 
     OptixDeviceContext context = nullptr;
     OptixModule module = nullptr;
@@ -204,6 +199,7 @@ public:
 
     ~Optix();
 
+    /* Charge un fichier .obj en retourne une liste de sommets et de triangles */
     void loadObj(
         const std::string& filename,
         std::vector<Vertex>& out_vertices,
@@ -212,18 +208,25 @@ public:
         float& min,
         float& max);
 
+    /* Initialise le contexte d'optix */
     int init();
 
+    /* Charge le shader en mémoire */
     void loadShaders();
 
+    /* Initialise le pipeline d'optix */
     void initPipeline(CUdeviceptr d_list);
 
+    /* Charge un .obj et l'envoie sur GPU */
     CUdeviceptr initScene();
 
+    /* Rendu de l'image */
     void render();
 
+    /* Sauvegarde l'image en .txt */
     template<typename T>
     void saveDeviceArrayToFile(const T* device_array, size_t width, size_t height, const std::string& filename);
 
+    /* Sauvegarde l'image en .bmp */
     void saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* dev_data);
 };
