@@ -355,7 +355,7 @@ void Optix::render()
     cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
     cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
 
-    int nbIter = 100000;
+    int nbIter = 1;
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < nbIter; i++)

@@ -189,4 +189,30 @@ namespace Utils
         std::cout << "Nombre de triangles: " << std::round(layer_nb_vertex / 3.0) << std::endl;
         file.close();
     }
+
+
+    std::vector<cv::Point2f> LoadObjVertex(const char* filename)
+    {
+        std::vector<cv::Point2f> vertex;
+        std::ifstream file(filename);
+        std::string line;
+        double temp;
+
+        while (std::getline(file, line)) 
+        {
+            std::stringstream ss(line);
+            std::string line_type;
+            ss >> line_type;
+
+            if (line_type == "v")
+            {
+                cv::Point2f vertice;
+                ss >> vertice.x >> vertice.y >> temp;
+                vertex.push_back(vertice);
+            }
+        }
+
+        file.close();
+        return vertex;
+    }
 }

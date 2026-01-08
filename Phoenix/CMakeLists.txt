@@ -10,6 +10,7 @@ find_package(Boost REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Qhull REQUIRED)
 find_package(CUDAToolkit 12.4 REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # --- Configuration des chemins OptiX ---
 set(OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0")
@@ -75,6 +76,7 @@ target_link_libraries(executable PRIVATE
     Qhull::qhull_r
     CUDA::cudart
     CUDA::cuda_driver
+    ${OpenCV_LIBS}
 )
 
 # Copie du fichier .optixir à côté de l'exécutable final

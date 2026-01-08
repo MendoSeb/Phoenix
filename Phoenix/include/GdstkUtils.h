@@ -2,6 +2,7 @@
 #include <array>
 #include <gdstk/gdstk.hpp>
 #include <vector>
+#include <opencv2/core/types.hpp>
 
 using namespace gdstk;
 
@@ -17,6 +18,9 @@ namespace GdstkUtils
 
 	/* Sauvegarde les polygones en .gds */
 	void SaveToGdsii(Library& lib, const char* fileName);
+
+	/* Save OpenCV polys */
+	void SaveToGdsii(std::vector<std::vector<cv::Point2f>>& polys, const char* fileName);
 
 	/* convertit les flex paths(chemins et cercles) en polygones pour faire l'union etc... */
 	void ConvertFlexPathsToPolygon(Library& lib);

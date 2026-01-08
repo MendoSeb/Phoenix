@@ -22,7 +22,7 @@ extern "C" __global__ void __raygen__rg() {
 
     // 2. Coordonnées normalisées dans l'espace de l'image (-1 à 1)
     float ratio = 4096.0f / 2176.0f;
-    float zoom = 0.0f;
+    float zoom = 1.0f;
 
     float u_normalized = (((float)x / (float)launch_dim_x * 2.0f - 1.0f) * ratio) / zoom;
     float v_normalized = (((float)y / (float)launch_dim_y * 2.0f - 1.0f)) / zoom;

@@ -1,6 +1,7 @@
 #include "GdstkUtils.h"
 #include <iostream>
 #include <__msvc_chrono.hpp>
+#include <opencv2/core/types.hpp>
 
 
 namespace GdstkUtils
@@ -34,13 +35,36 @@ namespace GdstkUtils
 
     void SaveToGdsii(Library& lib, const char* fileName)
     {
-        //MakeFracture(lib);
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
+        MakeFracture(lib);
         lib.write_gds(fileName, INT32_MAX, NULL);
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Sauvegarde vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        std::cout << "Sauvegarde (avec fracture) vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+    }
+
+
+    void SaveToGdsii(std::vector<std::vector<cv::Point2f>>& polys, const char* fileName)
+    {
+        Library lib = {};
+        lib.init("library", 1e-6, 1e-9);
+
+        Cell cell = {};
+        cell.name = copy_string("FIRST", NULL);
+        lib.cell_array.append(&cell);
+
+        for (auto& poly : polys)
+        {
+            Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
+
+            for (auto& point : poly)
+                gdstk_poly->point_array.append( Vec2{point.x, point.y} );
+
+            cell.polygon_array.append(gdstk_poly);
+        }
+
+        lib.write_gds(fileName, INT32_MAX, NULL);
     }
 
 
@@ -139,24 +163,35 @@ namespace GdstkUtils
                 p.x = (((std::abs(min) + p.x) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
                 p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
             }
+
+        printf("Polygones normalises\n");
     }
 
 
     void MakeFracture(Library& lib)
     {
+        Array<gdstk::Polygon*> fractured_polys = {};
+
         for (size_t i = 0; i < lib.cell_array.count; i++)
         {
-            Array<gdstk::Polygon*> new_polys = {};
-
             for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
             {
-                gdstk::Polygon* poly = lib.cell_array[i]->polygon_array[k];
-                poly->fracture(8190, 1e-3, new_polys);
+                Array<gdstk::Polygon*> fractured = {};
 
-                if (poly->point_array.count > 8190)
-                    std::cout << i << ", " << k << ": " << new_polys.count << std::endl;
+                gdstk::Polygon* poly = lib.cell_array[i]->polygon_array[k];
+                poly->fracture(8190, 1e-3, fractured);
+
+                for (size_t m = 0; m < fractured.count; m++)
+                    fractured_polys.append(fractured[m]);
             }
         }
+
+        lib.cell_array.clear();
+        Cell* cell = new Cell();
+        cell->name = copy_string("FIRST", NULL);
+        lib.cell_array.append(cell);
+
+        cell->polygon_array = fractured_polys;
     }
 
 

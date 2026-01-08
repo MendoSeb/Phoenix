@@ -10,6 +10,9 @@
 #include "earcut.hpp"
 #include "Utilities.h"
 #include "Optix.h"
+#include "Warping.h"
+
+#include <opencv2/opencv.hpp>
 
 
 void BoostGeometryDemo()
@@ -160,6 +163,38 @@ void TriangulateWithoutUnion()
 }
 
 
+void WarpingDemo()
+{
+    const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds";
+    //const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds";
+    Library lib = GdstkUtils::LoadGDS(filename);
+
+    std::vector<cv::Point2f> src_box;
+    src_box.push_back(cv::Point2f(-100000.0f, 50000.0f));
+    src_box.push_back(cv::Point2f(-100000.0f, 0.0f));
+    src_box.push_back(cv::Point2f(-50000.0f, 0.0f));
+    src_box.push_back(cv::Point2f(-50000.0f, 50000.0f));
+
+    std::vector<cv::Point2f> dst_box;
+    dst_box.push_back(cv::Point2f(-90000.0f, 90000.0f));
+    dst_box.push_back(cv::Point2f(-110000.0f, 50000.0f));
+    dst_box.push_back(cv::Point2f(-50000.0f, 0.0f));
+    dst_box.push_back(cv::Point2f(-10000.0f, 60000.0f));
+
+    std::vector<std::vector<cv::Point2f>> polys_in_box = Warping::FindPolygonesInBox(lib, src_box);
+
+    // find transformation matrix from src_box to dst_box
+    cv::Mat warp = cv::getPerspectiveTransform(src_box, dst_box);
+
+    // apply matrix to points in src_box
+    for (std::vector<cv::Point2f>& poly : polys_in_box)
+        cv::perspectiveTransform(poly, poly, warp);
+
+    // save warped polys to gds
+    GdstkUtils::SaveToGdsii(polys_in_box, "C:/Users/PC/Desktop/poc/fichiers_gdsii/warp_test.gds");
+}
+
+
 int main()
 {
     //BoostGeometryDemo();
@@ -169,6 +204,9 @@ int main()
     //TriangulateWithoutUnion();
 
     //OptixDemo();
+
+    WarpingDemo();
+
 
     return 0;
 }
