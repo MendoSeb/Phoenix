@@ -11,6 +11,7 @@
 #include <GdstkUtils.h>
 #include <Clipper2Utils.h>
 #include <BoostUtils.h>
+#include <vector_functions.h>
 
 
 namespace Utils
@@ -24,9 +25,9 @@ namespace Utils
     /* Sauvegarde des séries de liste de polygones de type gdstk en .obj */
     void WriteLibraryToObj(const std::vector<Library>& layers, const char* filename);
 
-    /* Sauvegarde des triangles de type OpenCV en .obj */
-    void WriteOpenCVVertexToObj(const std::vector<Library>& layers, const char* filename);
+    /* Récupère les sommets et triangles à partir d'une liste de polygones OpenCV */
+    std::pair<float3*, uint3*> GetVertexAndTriangles(std::vector<std::vector<cv::Point2f>>& polys);
 
     /* Charge les sommets d'un .obj */
-    std::vector<cv::Point2f> LoadObjVertex(const char* filename);
+    std::pair<std::vector<cv::Point2f>, std::vector<uint3>> LoadObjVerticesTriangles(const char* filename);
 }

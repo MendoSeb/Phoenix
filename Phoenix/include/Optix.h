@@ -202,11 +202,11 @@ public:
     /* Charge un fichier .obj en retourne une liste de sommets et de triangles */
     void loadObj(
         const std::string& filename,
-        std::vector<Vertex>& out_vertices,
-        std::vector<Triangle>& out_triangles,
-        CUdeviceptr& d_list,
-        float& min,
-        float& max);
+        float3*& vertices,
+        uint3*& triangles,
+        int& nb_v,
+        int& nb_f
+    );
 
     /* Initialise le contexte d'optix */
     int init();
@@ -215,7 +215,7 @@ public:
     void loadShaders();
 
     /* Initialise le pipeline d'optix */
-    void initPipeline(CUdeviceptr d_list);
+    void initPipeline(CUdeviceptr d_tris);
 
     /* Charge un .obj et l'envoie sur GPU */
     CUdeviceptr initScene();

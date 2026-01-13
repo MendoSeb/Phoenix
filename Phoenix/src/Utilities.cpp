@@ -52,43 +52,26 @@ namespace Utils
         }
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Triangulation faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
+        std::cout << "Triangulation faite en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
         return result;
     }
 
 
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
     {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
         std::ofstream file(filename);
-        double min = INT_MAX;
-        double max = INT_MIN;
 
-        earcutPoint test;
-        test[0] = 1.0;
-
-        // trouver le min et max
-        for (auto& layer : layers)
-            for (const std::vector<std::vector<earcutPoint>>& poly : layer.first)
-                for (const std::vector<earcutPoint>& poly_sub : poly)
-                    for (const earcutPoint& point : poly_sub)
-                    {
-                        double temp_min = std::min(point[0], point[1]);
-                        double temp_max = std::max(point[0], point[1]);
-
-                        if (temp_min < min) min = temp_min;
-                        if (temp_max > max) max = temp_max;
-                    }
-
-
-        // normaliser les sommet
-        for (int i = 0; i < layers.size(); i++)
+        // écrire les sommets comme entiers, les doubles mettent du temps à être écrits (environ x2)
+        for (char i = 0; i < layers.size(); i++)
             for (std::vector<std::vector<earcutPoint>>& poly : layers[i].first)
                 for (std::vector<earcutPoint>& poly_sub : poly)
                     for (earcutPoint& point : poly_sub)
                     {
-                        point[0] = ((point[0] + std::abs(min)) / (std::abs(min) + max)) * 2.0 - 1.0;
-                        point[1] = ((point[1] + std::abs(min)) / (std::abs(min) + max)) * 2.0 - 1.0;
-                        file << "v " << std::to_string(point[0]) << " " << std::to_string(point[1]) << " " << std::to_string(i / 5.0) << "\n";
+                        file << "v "<< std::to_string((int)point[0])
+                             << " " << std::to_string((int)point[1])
+                             << " " << std::to_string(i) << "\n";
                     }
 
         // enregistrer les indices dans l'obj
@@ -102,7 +85,6 @@ namespace Utils
             nb_color++;
 
             for (const std::vector<uint32_t>& indices : layer.second)
-            {
                 for (int i = 0; i < indices.size(); i += 3)
                 {
                     std::string i1 = std::to_string(nb_vertex + indices[i] + 1);
@@ -111,18 +93,19 @@ namespace Utils
                     file << "f " << i1 << " " << i2 << " " << i3 << "\n";
                     nb_tris++;
                 }
-            }
 
             // incrémenter le nombre de vertex pour offset les indices des layers
             for (auto& poly : layer.first)
                 for (auto& p0 : poly)
-                    for (auto& p1 : p0)
-                        nb_vertex++;
+                    nb_vertex += p0.size();
         }
 
         std::cout << "Nombre de triangles: " << nb_tris << std::endl;
         std::cout << "Nombre de sommets: " << nb_vertex << std::endl;
         file.close();
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "WriteLayersObj fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
     }
 
 
@@ -134,9 +117,13 @@ namespace Utils
 
         // trouver le min et max
         for (const Library& layer : layers)
-            for (size_t i = 0; i < layer.cell_array[0]->polygon_array.count; i++)
+        {
+            assert(layer.cell_array.count == 1);
+            Cell* cell = layer.cell_array[0];
+
+            for (size_t i = 0; i < cell->polygon_array.count; i++)
             {
-                gdstk::Polygon* poly = layer.cell_array[0]->polygon_array[i];
+                gdstk::Polygon* poly = cell->polygon_array[i];
 
                 for (size_t k = 0; k < poly->point_array.count; k++)
                 {
@@ -144,12 +131,16 @@ namespace Utils
                     max = std::max(max, std::max(poly->point_array[k].x, poly->point_array[k].y));
                 }
             }
+        }
 
         // normaliser les sommets entre -1 et 1
         for (int m = 0; m < layers.size(); m++)
-            for (size_t i = 0; i < layers[m].cell_array[0]->polygon_array.count; i++)
+        {
+            Cell* cell = layers[m].cell_array[0];
+
+            for (size_t i = 0; i < cell->polygon_array.count; i++)
             {
-                gdstk::Polygon* poly = layers[m].cell_array[0]->polygon_array[i];
+                gdstk::Polygon* poly = cell->polygon_array[i];
 
                 for (size_t k = 0; k < poly->point_array.count; k++)
                 {
@@ -160,6 +151,7 @@ namespace Utils
                     file << "v " << std::to_string(point.x) << " " << std::to_string(point.y) << " " << std::to_string(-m / 10.0) << "\n";
                 }
             }
+        }
 
         // enregistrer les indices dans l'obj
         size_t layer_nb_vertex = 0;
@@ -168,10 +160,11 @@ namespace Utils
         for (const Library& layer : layers)
         {
             size_t poly_nb_vertex = 0;
+            Cell* cell = layer.cell_array[0];
 
-            for (size_t i = 0; i < layer.cell_array[0]->polygon_array.count; i++)
+            for (size_t i = 0; i < cell->polygon_array.count; i++)
             {
-                gdstk::Polygon* poly = layer.cell_array[0]->polygon_array[i];
+                gdstk::Polygon* poly = cell->polygon_array[i];
 
                 for (size_t k = 0; k < poly->point_array.count; k += 3)
                 {
@@ -190,29 +183,60 @@ namespace Utils
         file.close();
     }
 
-
-    std::vector<cv::Point2f> LoadObjVertex(const char* filename)
+    std::pair<std::vector<cv::Point2f>, std::vector<uint3>>  LoadObjVerticesTriangles(const char* filename)
     {
-        std::vector<cv::Point2f> vertex;
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        
+        std::vector<cv::Point2f> vertices;
+        std::vector<uint3> triangles;
+        
         std::ifstream file(filename);
         std::string line;
-        double temp;
+        float temp = 0.0f;
 
+        // récupérer les données du fichier .obj
         while (std::getline(file, line)) 
         {
-            std::stringstream ss(line);
-            std::string line_type;
-            ss >> line_type;
-
-            if (line_type == "v")
+            if (line[0] == 'v')
             {
-                cv::Point2f vertice;
-                ss >> vertice.x >> vertice.y >> temp;
-                vertex.push_back(vertice);
+                cv::Point2f vertex;
+                int res = sscanf(line.c_str(), "v %f %f %f", &vertex.x, &vertex.y, &temp);
+                vertices.push_back(vertex);
+            }
+            else if (line[0] == 'f')
+            {
+                uint3 tri = { 0.0f, 0.0f, 0.0f };
+                int res = sscanf(line.c_str(), "f %d/%d/%d", &tri.x, &tri.y, &tri.z);
+                triangles.push_back(tri);
             }
         }
 
         file.close();
-        return vertex;
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Chargement de l'obj en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+        return { vertices, triangles };
+    }
+
+
+    std::pair<float3*, uint3*> GetVertexAndTriangles(std::vector<std::vector<cv::Point2f>>& polys)
+    {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        std::pair<float3*, uint3*> obj;
+        obj.first = (float3*)malloc(polys.size() * 3 * sizeof(float3));
+        obj.second = (uint3*)malloc(polys.size() * sizeof(uint3));
+
+        for (size_t i = 0; i < polys.size(); i++)
+        {
+                obj.first[i*3] = make_float3(polys[i][0].x, polys[i][0].y, 0.0f);
+                obj.first[i*3 + 1] = make_float3(polys[i][1].x, polys[i][1].y, 0.0f);
+                obj.first[i*3 + 2] = make_float3(polys[i][2].x, polys[i][2].y, 0.0f);
+
+                obj.second[i] = make_uint3(i * 3, i * 3 + 1, i * 3 + 2);
+        }
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Extract vertices and triangles: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms\n" << std::endl;
+        return obj;
     }
 }

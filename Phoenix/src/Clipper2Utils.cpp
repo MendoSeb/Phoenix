@@ -172,7 +172,7 @@ namespace Clipper2Utils
         offsetter.Execute(deg, output);
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Degraissement fait en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        std::cout << "Degraissement fait en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
     }
 
 
@@ -189,7 +189,7 @@ namespace Clipper2Utils
         cd.Execute(ClipType::Difference, FillRule::NonZero, output);
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Difference faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        std::cout << "Difference faite en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
     }
 
 
@@ -230,7 +230,7 @@ namespace Clipper2Utils
         cd.Execute(ClipType::Difference, FillRule::NonZero, output);
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Inverse fait en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        std::cout << "Inverse fait en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
     }
 
 

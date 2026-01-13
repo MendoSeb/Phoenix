@@ -21,8 +21,8 @@ void BoostGeometryDemo()
     std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/boost/";
 
     //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds);
-    Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds");
+    Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds");
 
     GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12);
     GdstkUtils::Normalize(lib);
@@ -62,20 +62,22 @@ void Clipper2Demo()
     paths.clear();
 
     // inverse
-    Clipper2Utils::MakeInverse(u, inverse);
+    /* Clipper2Utils::MakeInverse(u, inverse);
     Clipper2Utils::ConvertPolyTree64ToGdsiiPath(inverse, inverse_lib, 0);
-    GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str());
+    GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str()); */
 
     Clipper2Utils::MakeTriangulationPolyTree(u, clipper2_lib);
+    GdstkUtils::SaveToGdsii(clipper2_lib, (root_path + "union_mono_couche_triangulée.gds").c_str());
+
     std::vector<Library> clipper2_layers = { clipper2_lib };
-    Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche_clipper2.obj").c_str());
+    Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche.obj").c_str());
     clipper2_lib.clear();
 
-    Clipper2Utils::MakeTriangulationPolyTree(inverse, clipper2_inverse_lib);
+    /* Clipper2Utils::MakeTriangulationPolyTree(inverse, clipper2_inverse_lib);
     clipper2_layers = { clipper2_inverse_lib };
-    Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche_inverse_clipper2.obj").c_str());
+    Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche_inverse.obj").c_str());
     clipper2_inverse_lib.clear();
-    inverse.Clear();
+    inverse.Clear(); */
 
     // degraissement
     Clipper2Utils::MakeDegraissement(u, -1, deg);
@@ -109,8 +111,9 @@ void GdstkDemo()
     std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/gdstk/";
 
     Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-    GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 12, 12); // factor moins grand qu'avec clipper car pas de conversion en int64_t
-    
+    GdstkUtils::RepeatAndTranslateGdstk(lib, 2, 2, 12, 12); // factor moins grand qu'avec clipper car pas de conversion en int64_t
+    GdstkUtils::Normalize(lib);
+
     // scale pour la précision et union
     Library u_lib = GdstkUtils::MakeUnion(lib);
     GdstkUtils::SaveToGdsii(u_lib, (root_path + "union_gdstk.gds").c_str());
@@ -141,8 +144,8 @@ void OptixDemo()
     o.init();
     o.loadShaders();
 
-    CUdeviceptr d_list = o.initScene();
-    o.initPipeline(d_list);
+    CUdeviceptr d_tris = o.initScene();
+    o.initPipeline(d_tris);
 
     o.render();
 }
@@ -163,35 +166,152 @@ void TriangulateWithoutUnion()
 }
 
 
-void WarpingDemo()
+void ThreadDemo
+(
+    Library& lib, 
+    int index_box, 
+    std::vector<std::vector<cv::Point2f>>& polys_in_box, 
+    std::mutex& mutex
+)
 {
-    const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds";
-    //const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds";
-    Library lib = GdstkUtils::LoadGDS(filename);
-
-    std::vector<cv::Point2f> src_box;
-    src_box.push_back(cv::Point2f(-100000.0f, 50000.0f));
-    src_box.push_back(cv::Point2f(-100000.0f, 0.0f));
-    src_box.push_back(cv::Point2f(-50000.0f, 0.0f));
-    src_box.push_back(cv::Point2f(-50000.0f, 50000.0f));
-
-    std::vector<cv::Point2f> dst_box;
-    dst_box.push_back(cv::Point2f(-90000.0f, 90000.0f));
-    dst_box.push_back(cv::Point2f(-110000.0f, 50000.0f));
-    dst_box.push_back(cv::Point2f(-50000.0f, 0.0f));
-    dst_box.push_back(cv::Point2f(-10000.0f, 60000.0f));
-
-    std::vector<std::vector<cv::Point2f>> polys_in_box = Warping::FindPolygonesInBox(lib, src_box);
+    std::vector<std::vector<cv::Point2f>> warped_polys = Warping::FindPolygonesInBox(lib, src_dst_boxes[index_box].first);
 
     // find transformation matrix from src_box to dst_box
-    cv::Mat warp = cv::getPerspectiveTransform(src_box, dst_box);
+    cv::Mat warp = cv::getPerspectiveTransform(src_dst_boxes[index_box].first, src_dst_boxes[index_box].second);
 
     // apply matrix to points in src_box
-    for (std::vector<cv::Point2f>& poly : polys_in_box)
+    std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
+
+    for (std::vector<cv::Point2f>& poly : warped_polys)
         cv::perspectiveTransform(poly, poly, warp);
 
-    // save warped polys to gds
-    GdstkUtils::SaveToGdsii(polys_in_box, "C:/Users/PC/Desktop/poc/fichiers_gdsii/warp_test.gds");
+    // ajouter les polygones transformés dans la liste globale
+    mutex.lock();
+    polys_in_box.insert(polys_in_box.end(), warped_polys.begin(), warped_polys.end());
+    mutex.unlock();
+
+    std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
+    std::cout << "Thread:" << index_box << " ,Apply transformation fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
+}
+
+
+void ThreadDemo3(std::pair<float3*, uint3*>& obj, int index_box)
+{
+    
+}
+
+
+void WarpingDemo1()
+{
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    int NB_ITERATION = 50;
+
+    for (int i = 0; i < NB_ITERATION; i++)
+    {
+        const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union_mono_couche_triangulée.gds";
+        Library lib = GdstkUtils::LoadGDS(filename);
+        std::vector<std::vector<cv::Point2f>> polys_in_box;
+
+        std::thread threads[8];
+        std::mutex mutex;
+
+        // déformer pour chaque paire de boite (src, dst)
+        for (int i = 0; i < src_dst_boxes.size(); i++)
+        {
+            threads[i] = std::thread(
+                ThreadDemo,
+                std::ref(lib),
+                i,
+                std::ref(polys_in_box),
+                std::ref(mutex)
+            );
+        }
+
+        for (int i = 0; i < src_dst_boxes.size(); i++)
+            threads[i].join();
+
+        lib.clear();
+
+        //GdstkUtils::SaveToGdsii(polys_in_box, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/warp_test.gds");
+        std::pair<float3*, uint3*> vertices_tris = Utils::GetVertexAndTriangles(polys_in_box);
+        free(vertices_tris.first);
+        free(vertices_tris.second);
+    }
+        
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout << "WarpingDemo faite en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / NB_ITERATION << " ms" << std::endl;
+}
+
+
+void WarpingDemo2()
+{
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    int NB_ITERATION = 50;
+
+    for (int i = 0; i < NB_ITERATION; i++)
+    {
+        const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds";
+        Library lib = GdstkUtils::LoadGDS(filename);
+        std::vector<std::vector<cv::Point2f>> polys_in_box;
+
+        std::thread threads[8];
+        std::mutex mutex;
+
+        // déformer pour chaque paire de boite (src, dst)
+        for (int i = 0; i < src_dst_boxes.size(); i++)
+        {
+            threads[i] = std::thread(
+                ThreadDemo,
+                std::ref(lib),
+                i,
+                std::ref(polys_in_box),
+                std::ref(mutex)
+            );
+        }
+
+        for (int i = 0; i < src_dst_boxes.size(); i++)
+            threads[i].join();
+
+        lib.clear();
+
+        // triangulation earcut après tranformation
+        Library lib2 = Warping::ConvertOpenCVPolygonesToGdstk(polys_in_box);
+
+        std::vector<Library> union_layer = { lib2 };
+        std::vector<earcutLayer> pair = Utils::EarcutTriangulation(union_layer);
+        //Utils::WriteLayersObj(pair, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/demo2.obj");
+        //GdstkUtils::SaveToGdsii(polys_in_boxs, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/warp_test.gds");
+    }
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout << "WarpingDemo faite en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / NB_ITERATION << " ms" << std::endl;
+}
+
+
+void WarpingDemo3()
+{
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    int NB_ITERATION = 1;
+
+    for (int i = 0; i < NB_ITERATION; i++)
+    {
+        const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj";
+        std::pair<std::vector<cv::Point2f>, std::vector<uint3>> obj = Utils::LoadObjVerticesTriangles(filename);
+
+        for (int k = 0; k < 8; k++)
+        {
+            std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
+
+            cv::Mat warp = cv::getPerspectiveTransform(src_dst_boxes[k].first, src_dst_boxes[k].second);
+            Warping::TransformVerticesInBox(obj, src_dst_boxes[k].second, warp);
+
+            std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
+            std::cout << "Transform: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
+        }
+    }
+   
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout << "Demo 3 faite en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / NB_ITERATION << " ms" << std::endl;
 }
 
 
@@ -203,10 +323,11 @@ int main()
 
     //TriangulateWithoutUnion();
 
-    //OptixDemo();
+    OptixDemo();
 
-    WarpingDemo();
-
+    //WarpingDemo1();
+    //WarpingDemo2();
+    //WarpingDemo3();
 
     return 0;
 }

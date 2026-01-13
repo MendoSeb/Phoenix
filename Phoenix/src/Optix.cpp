@@ -31,20 +31,24 @@ Optix::~Optix()
 
 void Optix::loadObj(
     const std::string& filename,
-    std::vector<Vertex>& out_vertices,
-    std::vector<Triangle>& out_triangles,
-    CUdeviceptr& d_list,
-    float& min, 
-    float& max) 
+    float3*& vertices,
+    uint3*& triangles,
+    int& nb_v,
+    int& nb_f)
 {
     std::ifstream file(filename);
     int layer_type = 0;
     std::vector<int> triangles_type_vector;
+    float min = INT_MAX;
+    float max = INT_MIN;
 
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << std::endl;
         return;
     }
+
+    std::vector<Vertex> temp_vertices;
+    std::vector<Triangle> temp_triangles;
 
     std::string line;
     while (std::getline(file, line)) {
@@ -56,7 +60,7 @@ void Optix::loadObj(
             // Found a vertex
             Vertex v;
             ss >> v.x >> v.y >> v.z;
-            out_vertices.push_back(v);
+            temp_vertices.push_back(v);
             float min_ = min(v.x, v.y);
             float max_ = max(v.x, v.y);
 
@@ -89,22 +93,26 @@ void Optix::loadObj(
                 else if (i == 2) t.v3 = v_index - 1;
             }
 
-            out_triangles.push_back(t);
+            temp_triangles.push_back(t);
             triangles_type_vector.push_back(layer_type);
         }
     }
     file.close();
 
-    // conversion en int* avec adress cuda
-    int* triangles_types = new int[triangles_type_vector.size()];
+    nb_v = temp_vertices.size();
+    nb_f = temp_triangles.size();
 
-    for (int i = 0; i < triangles_type_vector.size(); i++)
-        triangles_types[i] = triangles_type_vector[i];
+    // conversion en int* avec adresses cuda
+    vertices = new float3[temp_vertices.size()];
+    triangles = new uint3[temp_triangles.size()];
 
-    cudaMalloc(reinterpret_cast<void**>(&d_list), triangles_type_vector.size() * sizeof(int));
-    cudaMemcpy(reinterpret_cast<void*>(d_list), triangles_types, triangles_type_vector.size() * sizeof(int), cudaMemcpyHostToDevice);
+    for (size_t i = 0; i < temp_vertices.size(); i++)
+        vertices[i] = make_float3(temp_vertices[i].x, temp_vertices[i].y, temp_vertices[i].z);
 
-    std::cout << "Loaded " << out_vertices.size() << " vertices and " << out_triangles.size() << " triangles." << std::endl;
+    for (size_t i = 0; i < temp_triangles.size(); i++)
+        triangles[i] = make_uint3(temp_triangles[i].v1, temp_triangles[i].v2, temp_triangles[i].v3);
+
+    std::cout << "Loaded " << temp_vertices.size() << " vertices and " << temp_triangles.size() << " triangles." << std::endl;
 }
 
 
@@ -200,7 +208,7 @@ void Optix::loadShaders()
 
 
 
-void Optix::initPipeline(CUdeviceptr d_list)
+void Optix::initPipeline(CUdeviceptr d_tris)
 {
     // --- 1. Création de la Pipeline ---
     OptixProgramGroup program_groups[] = { raygen_program_group, miss_program_group, hit_program_group };
@@ -232,10 +240,12 @@ void Optix::initPipeline(CUdeviceptr d_list)
     sbt.missRecordCount = 1;
 
     HitGroupSbtRecord hg_sbt;
-    hg_sbt.data.triangles_type = reinterpret_cast<int*>(d_list); // pour donner un booléen à chaque triangle
+    hg_sbt.data.triangles_type = reinterpret_cast<int*>(d_tris); // pour donner un booléen à chaque triangle
     sbt.hitgroupRecordBase = create_sbt_record(hit_program_group, hg_sbt, sizeof(hg_sbt));
     sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupSbtRecord);
     sbt.hitgroupRecordCount = 1;
+
+    cudaFree(reinterpret_cast<void*>(d_tris));
 }
 
 
@@ -247,51 +257,55 @@ CUdeviceptr Optix::initScene()
     accel_options.buildFlags = OPTIX_BUILD_FLAG_NONE;
     accel_options.operation = OPTIX_BUILD_OPERATION_BUILD;
 
-    std::vector<Vertex> objVertices;
-    std::vector<Triangle> objTriangles;
-    CUdeviceptr d_list;
-    float min = INT_MAX;
-    float max = INT_MIN;
+    float3* vertices = nullptr;
+    uint3* triangles = nullptr;
+    int nb_v = 0;
+    int nb_f = 0;
 
-    loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_clipper2.obj", objVertices, objTriangles, d_list, min, max);
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj", objVertices, objTriangles, d_list, min, max);
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_multi_couches_earcut.obj", objVertices, objTriangles, d_list, min, max);
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_clipper2_multi_couche_v2.obj", objVertices, objTriangles, d_list, min, max);
+    void* d_vertices = nullptr;
+    CUdeviceptr d_tris;
 
-    int numTriangle = objTriangles.size();
-    int totalNumTriangle = numTriangle;
-    float3* vertices;
-    vertices = (float3*)malloc(totalNumTriangle * 3 * sizeof(float3));
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_clipper2.obj", objVertices, objTriangles);
+    loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_multi_couches_earcut.obj", objVertices, objTriangles);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_clipper2_multi_couche_v2.obj", objVertices, objTriangles);
 
-    for (int i = 0; i < numTriangle; i++)
-    {
-        vertices[i * 3] = make_float3(objVertices[objTriangles[i].v1].x, objVertices[objTriangles[i].v1].y, objVertices[objTriangles[i].v1].z);
-        vertices[i * 3 + 1] = make_float3(objVertices[objTriangles[i].v2].x, objVertices[objTriangles[i].v2].y, objVertices[objTriangles[i].v2].z);
-        vertices[i * 3 + 2] = make_float3(objVertices[objTriangles[i].v3].x, objVertices[objTriangles[i].v3].y, objVertices[objTriangles[i].v3].z);
-    }
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_full_clipper2.obj", objVertices, objTriangles);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_full_clipper2_inverse.obj", vertices, triangles, nb_v, nb_f);
 
-    const size_t vertices_size = sizeof(float3) * totalNumTriangle * 3;
-    std::cout << "MemSize = " << (vertices_size / 1024 / 1024) << " Mo" << std::endl;
-    CUdeviceptr d_vertices = 0;
-    cudaMalloc(reinterpret_cast<void**>(&d_vertices), vertices_size);
-    cudaMemcpy(
-        reinterpret_cast<void*>(d_vertices),
-        vertices,
-        vertices_size,
-        cudaMemcpyHostToDevice
-    );
+    int v_size = nb_v * sizeof(float3);
+    int f_size = nb_f * sizeof(uint3);
+
+    // allouer de la mémoire cuda
+    cudaMalloc(&d_vertices, v_size);
+    cudaMalloc(reinterpret_cast<void**>(&d_tris), f_size);
+
+    // remplir cette mémoire cuda
+    cudaMemcpy(d_vertices, vertices, v_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(reinterpret_cast<void*>(d_tris), triangles, f_size, cudaMemcpyHostToDevice);
 
     free(vertices);
-
-    // Our build input is a simple list of non-indexed triangle vertices
-    const uint32_t triangle_input_flags[1] = { OPTIX_GEOMETRY_FLAG_NONE };
+    free(triangles);
+    
     OptixBuildInput triangle_input = {};
     triangle_input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
+
+    // Liaison des sommets
     triangle_input.triangleArray.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
-    triangle_input.triangleArray.numVertices = static_cast<uint32_t>(totalNumTriangle * 3);
-    triangle_input.triangleArray.vertexBuffers = &d_vertices;
+    triangle_input.triangleArray.numVertices = static_cast<uint32_t>(nb_v);
+    triangle_input.triangleArray.vertexBuffers = (CUdeviceptr*)&d_vertices; // Adresse du pointeur
+    triangle_input.triangleArray.vertexStrideInBytes = sizeof(float3);
+
+    // Liaison des indices
+    triangle_input.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
+    triangle_input.triangleArray.numIndexTriplets = static_cast<uint32_t>(nb_f);
+    triangle_input.triangleArray.indexBuffer = (CUdeviceptr)d_tris;
+    triangle_input.triangleArray.indexStrideInBytes = sizeof(uint3);
+
+    // Flags et Matériaux
+    const uint32_t triangle_input_flags[1] = { OPTIX_GEOMETRY_FLAG_NONE };
     triangle_input.triangleArray.flags = triangle_input_flags;
-    triangle_input.triangleArray.numSbtRecords = 1;
+    triangle_input.triangleArray.numSbtRecords = 1; // Obligatoire si 1 seul matériau
 
     OptixAccelBufferSizes gas_buffer_sizes;
     OPTIX_CHECK(optixAccelComputeMemoryUsage(
@@ -322,9 +336,11 @@ CUdeviceptr Optix::initScene()
         nullptr,            // emitted property list
         0                   // num emitted properties
     ));
+
     cudaFree(reinterpret_cast<void*>(d_temp_buffer_gas));
     cudaFree(reinterpret_cast<void*>(d_vertices));
-    return d_list;
+
+    return d_tris;
 }
 
 
@@ -355,7 +371,7 @@ void Optix::render()
     cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
     cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
 
-    int nbIter = 1;
+    int nbIter = 1000;
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < nbIter; i++)

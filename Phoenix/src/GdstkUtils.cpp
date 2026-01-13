@@ -11,6 +11,8 @@ namespace GdstkUtils
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         Library lib = read_gds(fileName, 1e-6, 1e-9, nullptr, nullptr);
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
         std::cout << "Unit: " << lib.unit << std::endl;
         std::cout << "Precision: " << lib.precision << std::endl;
         std::cout << "Nb cell: " << lib.cell_array.count << "\n\n";
@@ -27,8 +29,7 @@ namespace GdstkUtils
 
         ConvertFlexPathsToPolygon(lib);
 
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Fichier charge en polygones gdstk en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        std::cout << "Fichier charge en polygones gdstk en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
         return lib;
     }
 
@@ -47,6 +48,8 @@ namespace GdstkUtils
 
     void SaveToGdsii(std::vector<std::vector<cv::Point2f>>& polys, const char* fileName)
     {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
         Library lib = {};
         lib.init("library", 1e-6, 1e-9);
 
@@ -65,6 +68,10 @@ namespace GdstkUtils
         }
 
         lib.write_gds(fileName, INT32_MAX, NULL);
+        lib.clear();
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Sauvegarde gdsii OpenCV faite en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
     }
 
 
@@ -74,12 +81,12 @@ namespace GdstkUtils
         {
             Cell* c = lib.cell_array[i];
 
-            /// flexpath
+            // flexpath
             for (size_t k = 0; k < c->flexpath_array.count; k++)
             {
                 FlexPath* fp = c->flexpath_array[k];
 
-                /// pour les cercles
+                // pour les cercles
                 if (fp->spine.point_array.count == 2
                     && (fp->spine.point_array[0] == fp->spine.point_array[1]))
                 {
@@ -98,13 +105,10 @@ namespace GdstkUtils
                     c->polygon_array.append(circle);
                     continue;
                 }
+                // non circle path
+                else
+                    fp->to_polygons(false, 0, lib.cell_array[i]->polygon_array);
             }
-
-            // transformer les flexpath en polygones
-            Array<FlexPath*> flexpath_array = lib.cell_array[i]->flexpath_array;
-
-            for (size_t m = 0; m < flexpath_array.count; m++)
-                flexpath_array[m]->to_polygons(false, 0, lib.cell_array[i]->polygon_array);
 
             // destroy flexpath, they are now polygons
             lib.cell_array[i]->flexpath_array.clear();
@@ -197,19 +201,22 @@ namespace GdstkUtils
 
     Library MakeUnion(Library& lib)
     {
+        assert(lib.cell_array.count == 1);
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         gdstk::Library out_lib = {};
         out_lib.init("library", 1e-6, 1e-9);
+        Cell* out_cell = (Cell*)allocate_clear(sizeof(Cell));
+        out_cell->name = copy_string("cellule", NULL);
 
-        for (size_t i = 0; i < lib.cell_array.count; i++)
-        {
-            Cell* out_cell = (Cell*)allocate_clear(sizeof(Cell));
-            out_cell->name = copy_string("cellule", NULL);
+        boolean(
+            lib.cell_array[0]->polygon_array, 
+            out_cell->polygon_array, Operation::Or, 
+            1, // scaling
+            out_cell->polygon_array
+        );
 
-            boolean(lib.cell_array[i]->polygon_array, out_cell->polygon_array, Operation::Or, 1e3, out_cell->polygon_array);
-            out_lib.cell_array.append(out_cell);
-        }
+        out_lib.cell_array.append(out_cell);
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         std::cout << "Union faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
@@ -219,7 +226,6 @@ namespace GdstkUtils
 
     Library MakeDegraissement(Library lib, double dist)
     {
-        ;
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         gdstk::Library out_lib = {};
         out_lib.init("library", 1e-6, 1e-9);
@@ -244,7 +250,7 @@ namespace GdstkUtils
         }
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Dégraissement fait en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
+        std::cout << "Degraissement fait en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
         return out_lib;
     }
 
@@ -274,7 +280,7 @@ namespace GdstkUtils
         }
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Différence faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
+        std::cout << "Difference faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
         return out_lib;
     }
 }

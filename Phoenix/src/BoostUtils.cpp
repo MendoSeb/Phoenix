@@ -96,12 +96,17 @@ namespace BoostUtils
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         multi_polygon_t result;
+        int i = 0;
+        std::cout << polys.size() << std::endl;
 
         /*for (const polygon_t& p : polys)
         {
+            std::cout << i << std::endl;
             multi_polygon_t temp;
             bg::union_(p, result, temp);
             result = temp;
+            bg::clear(temp);
+            i++;
         }*/
 
         bg::union_(polys, polys, result);
