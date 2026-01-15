@@ -34,15 +34,18 @@ namespace GdstkUtils
     }
 
 
-    void SaveToGdsii(Library& lib, const char* fileName)
+    void SaveToGdsii(Library& lib, const char* fileName, bool make_fracture)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        int nb_points_max = INT32_MAX;
 
-        MakeFracture(lib);
-        lib.write_gds(fileName, INT32_MAX, NULL);
+        if (make_fracture)
+            nb_points_max = 8190;
+
+        lib.write_gds(fileName, nb_points_max, NULL);
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "Sauvegarde (avec fracture) vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+        std::cout << "Sauvegarde vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
     }
 
 
@@ -88,7 +91,8 @@ namespace GdstkUtils
 
                 // pour les cercles
                 if (fp->spine.point_array.count == 2
-                    && (fp->spine.point_array[0] == fp->spine.point_array[1]))
+                    && (fp->spine.point_array[0].y == fp->spine.point_array[1].y)
+                    && ((fp->spine.point_array[0].x - fp->spine.point_array[1].x) < 2e-5))
                 {
                     double max_radius = std::max(fp->elements->half_width_and_offset[0].x, fp->elements->half_width_and_offset[0].y);
 
@@ -113,6 +117,90 @@ namespace GdstkUtils
             // destroy flexpath, they are now polygons
             lib.cell_array[i]->flexpath_array.clear();
         }
+    }
+
+
+    void RepeatAndTranslateGdstkNoTransformV2(Library& lib, int rep_x, int rep_y, double width, double height)
+    {
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            // polygones
+            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
+            {
+                Polygon* poly = lib.cell_array[i]->polygon_array[k];
+
+                poly->repetition = Repetition{
+                    RepetitionType::Rectangular,
+                    (uint64_t)rep_x, (uint64_t)rep_y,
+                    (double)width, (double)height
+                };
+            }
+
+            // flexpath
+            for (size_t k = 0; k < lib.cell_array[i]->flexpath_array.count; k++)
+            {
+                FlexPath* flex_path = lib.cell_array[i]->flexpath_array[k];
+
+                flex_path->repetition = Repetition{
+                    RepetitionType::Rectangular,
+                    (uint64_t)rep_x, (uint64_t)rep_y,
+                    (double)width, (double)height
+                };
+            }
+        }
+    }
+
+
+    void RepeatAndTranslateGdstkNoTransformV1(Library& lib, int rep_x, int rep_y, double width, double height)
+    {
+        Cell* cell = (Cell*)allocate_clear(sizeof(Cell));
+        cell->name = copy_string("FIRST", NULL);
+
+        for (size_t i = 0; i < lib.cell_array.count; i++)
+        {
+            // polygones
+            for (size_t k = 0; k < lib.cell_array[i]->polygon_array.count; k++)
+            {
+                Polygon* main_poly = lib.cell_array[i]->polygon_array[k];
+
+                // duplicate
+                for (size_t x = 0; x < rep_x; x++)
+                    for (size_t y = 0; y < rep_y; y++)
+                    {
+                        Polygon* new_poly = (Polygon*)allocate_clear(sizeof(Polygon));
+                        new_poly->point_array.copy_from(main_poly->point_array);
+                        new_poly->translate(Vec2{ x * width, y * height });
+                        cell->polygon_array.append(new_poly);
+                    }
+            }
+
+            // flexpath
+            for (size_t k = 0; k < lib.cell_array[i]->flexpath_array.count; k++)
+            {
+                FlexPath* main_flex_path = lib.cell_array[i]->flexpath_array[k];
+
+                // duplicate
+                for (size_t x = 0; x < rep_x; x++)
+                    for (size_t y = 0; y < rep_y; y++)
+                    {
+                        FlexPath* new_flex_path = (FlexPath*)allocate_clear(sizeof(FlexPath));
+                        new_flex_path->copy_from(*main_flex_path);
+                        new_flex_path->translate(Vec2{ x * width, y * height });
+
+                        if (main_flex_path->spine.point_array.count == 2
+                            && (main_flex_path->spine.point_array[0] == main_flex_path->spine.point_array[1]))
+                        {
+                            new_flex_path->spine.point_array[1] += Vec2{ 1e-5, 0 };
+                        }
+                        
+                        cell->flexpath_array.append(new_flex_path);
+                    }
+            }
+        }
+
+        lib.cell_array.clear();
+        lib.cell_array.append(cell);
+        std::cout << "Polygones dupliques en polygones gdstk" << std::endl;
     }
 
 
@@ -143,10 +231,11 @@ namespace GdstkUtils
     }
 
 
-    void Normalize(Library& lib)
+    void Normalize(Library& lib, double limit)
     {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
         assert(lib.cell_array.count == 1);
-        double limit = 1e5;
         double min = INT64_MAX;
         double max = INT64_MIN;
 
@@ -168,7 +257,8 @@ namespace GdstkUtils
                 p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
             }
 
-        printf("Polygones normalises\n");
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Normalisation en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
     }
 
 

@@ -35,18 +35,20 @@ void BoostGeometryDemo()
 
 void Clipper2Demo()
 {
-    std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/";
-    //std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/";
+    //std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/mesure/";
+    //std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/";
+    std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/";
 
     // duplicate
-    Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/duplicated_primaire_V2.gds");
+    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+    Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
     //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Legend PHC.gds",);
     //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Percage PHC SUP 250.gds");
     //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds");
     //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/square.gds");
-    GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 12, 12); // pour solder.gds
-    //RepeatAndTranslateGdstk(lib, 4, 3, 300000, 300000); // pour solder.gds
+    //GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 12, 12); // pour solder.gds
+    GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 300000, 300000); // pour solder.gds
     GdstkUtils::Normalize(lib);
 
     Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
@@ -58,45 +60,46 @@ void Clipper2Demo()
     // union
     Clipper2Utils::MakeUnionPolyTree(paths, u);
     Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib, 0);
-    GdstkUtils::SaveToGdsii(u_lib, (root_path + "union.gds").c_str());
+    GdstkUtils::SaveToGdsii(u_lib, (root_path + "union.gds").c_str(), false);
     paths.clear();
 
     // inverse
-    /* Clipper2Utils::MakeInverse(u, inverse);
+    Clipper2Utils::MakeInverse(u, inverse);
     Clipper2Utils::ConvertPolyTree64ToGdsiiPath(inverse, inverse_lib, 0);
-    GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str()); */
+    GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str(), false);
 
     Clipper2Utils::MakeTriangulationPolyTree(u, clipper2_lib);
-    GdstkUtils::SaveToGdsii(clipper2_lib, (root_path + "union_mono_couche_triangulée.gds").c_str());
+    GdstkUtils::SaveToGdsii(clipper2_lib, (root_path + "union_mono_couche_triangulee.gds").c_str(), false);
 
     std::vector<Library> clipper2_layers = { clipper2_lib };
     Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche.obj").c_str());
     clipper2_lib.clear();
 
-    /* Clipper2Utils::MakeTriangulationPolyTree(inverse, clipper2_inverse_lib);
+    Clipper2Utils::MakeTriangulationPolyTree(inverse, clipper2_inverse_lib);
     clipper2_layers = { clipper2_inverse_lib };
     Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche_inverse.obj").c_str());
     clipper2_inverse_lib.clear();
-    inverse.Clear(); */
+    inverse.Clear();
 
     // degraissement
     Clipper2Utils::MakeDegraissement(u, -1, deg);
     Clipper2Utils::ConvertPolyTree64ToGdsiiPath(deg, deg_lib, 0);
-    GdstkUtils::SaveToGdsii(deg_lib, (root_path + "degraissement.gds").c_str());
+    GdstkUtils::SaveToGdsii(deg_lib, (root_path + "degraissement.gds").c_str(), false);
 
     // difference
     Clipper2Utils::MakeDifference(u, deg, diff);
     Clipper2Utils::ConvertPolyTree64ToGdsiiPath(diff, diff_lib, 0);
-    GdstkUtils::SaveToGdsii(diff_lib, (root_path + "difference.gds").c_str());
+    GdstkUtils::SaveToGdsii(diff_lib, (root_path + "difference.gds").c_str(), false);
     deg.Clear();
     diff.Clear();
 
-    // triangulation of union in one layer with earcutt
+    // triangulation of union in one layer with earcut
+    GdstkUtils::MakeFracture(u_lib);
     std::vector<Library> union_layer = { u_lib };
     std::vector<earcutLayer> pair = Utils::EarcutTriangulation(union_layer);
     Utils::WriteLayersObj(pair, (root_path + "triangulation_mono_couche_earcut.obj").c_str());
 
-    // triangulation of union in several layers with earcutt
+    // triangulation of union in several layers with earcut
     std::vector<Library> union_layers = Clipper2Utils::ConvertPolyTree64ToGdsiiLayers(u);
     std::vector<earcutLayer> tris = Utils::EarcutTriangulation(union_layers);
     Utils::WriteLayersObj(tris, (root_path + "triangulation_multi_couches_earcut.obj").c_str());
@@ -116,16 +119,16 @@ void GdstkDemo()
 
     // scale pour la précision et union
     Library u_lib = GdstkUtils::MakeUnion(lib);
-    GdstkUtils::SaveToGdsii(u_lib, (root_path + "union_gdstk.gds").c_str());
+    GdstkUtils::SaveToGdsii(u_lib, (root_path + "union_gdstk.gds").c_str(), false);
     lib.clear();
 
     // dégraissement
     Library deg = GdstkUtils::MakeDegraissement(u_lib, degraissement); // -1 pour test
-    GdstkUtils::SaveToGdsii(deg, (root_path + "degraissement_gdstk.gds").c_str());
+    GdstkUtils::SaveToGdsii(deg, (root_path + "degraissement_gdstk.gds").c_str(), false);
 
     // différence
     Library diff = GdstkUtils::MakeDifference(u_lib, deg);
-    GdstkUtils::SaveToGdsii(diff, (root_path + "difference_gdstk.gds").c_str());
+    GdstkUtils::SaveToGdsii(diff, (root_path + "difference_gdstk.gds").c_str(), false);
     diff.clear();
     deg.clear();
 
@@ -153,8 +156,12 @@ void OptixDemo()
 
 void TriangulateWithoutUnion()
 {
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
     Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+    //Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
     GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 12, 12);
+    //GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 300000, 300000);
     GdstkUtils::Normalize(lib1);
     Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib1);
 
@@ -162,7 +169,10 @@ void TriangulateWithoutUnion()
     Clipper2Utils::MakeTriangulationPaths(paths, lib);
 
     std::vector<Library> layers = { lib };
-    Utils::WriteLibraryToObj(layers, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_clipper2_multi_couche_v2.obj");
+    Utils::WriteLibraryToObj(layers, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_clipper2_monocouche_v2.obj");
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    std::cout << "Triangulation monocouche V2 (sans union) en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 }
 
 
@@ -192,12 +202,6 @@ void ThreadDemo
 
     std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
     std::cout << "Thread:" << index_box << " ,Apply transformation fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
-}
-
-
-void ThreadDemo3(std::pair<float3*, uint3*>& obj, int index_box)
-{
-    
 }
 
 
@@ -246,7 +250,7 @@ void WarpingDemo1()
 void WarpingDemo2()
 {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    int NB_ITERATION = 50;
+    int NB_ITERATION = 1;
 
     for (int i = 0; i < NB_ITERATION; i++)
     {
@@ -291,7 +295,7 @@ void WarpingDemo2()
 void WarpingDemo3()
 {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    int NB_ITERATION = 1;
+    int NB_ITERATION = 10;
 
     for (int i = 0; i < NB_ITERATION; i++)
     {
@@ -321,13 +325,13 @@ int main()
     //Clipper2Demo();
     //GdstkDemo();
 
-    //TriangulateWithoutUnion();
-
-    OptixDemo();
+    //OptixDemo();
 
     //WarpingDemo1();
     //WarpingDemo2();
     //WarpingDemo3();
+
+    //TriangulateWithoutUnion();
 
     return 0;
 }

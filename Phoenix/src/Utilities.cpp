@@ -7,6 +7,7 @@ namespace Utils
 {
     std::vector<earcutLayer> EarcutTriangulation(std::vector<Library>& layers)
     {
+        printf("\nTriangulation earcut\n");
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         std::vector<earcutLayer> result;
 
@@ -69,8 +70,8 @@ namespace Utils
                 for (std::vector<earcutPoint>& poly_sub : poly)
                     for (earcutPoint& point : poly_sub)
                     {
-                        file << "v "<< std::to_string((int)point[0])
-                             << " " << std::to_string((int)point[1])
+                        file << "v "<< std::to_string(point[0] / 100000)
+                             << " " << std::to_string(point[1] / 100000)
                              << " " << std::to_string(i) << "\n";
                     }
 
@@ -112,26 +113,6 @@ namespace Utils
     void WriteLibraryToObj(const std::vector<Library>& layers, const char* filename)
     {
         std::ofstream file(filename);
-        double min = INT_MAX;
-        double max = INT_MIN;
-
-        // trouver le min et max
-        for (const Library& layer : layers)
-        {
-            assert(layer.cell_array.count == 1);
-            Cell* cell = layer.cell_array[0];
-
-            for (size_t i = 0; i < cell->polygon_array.count; i++)
-            {
-                gdstk::Polygon* poly = cell->polygon_array[i];
-
-                for (size_t k = 0; k < poly->point_array.count; k++)
-                {
-                    min = std::min(min, std::min(poly->point_array[k].x, poly->point_array[k].y));
-                    max = std::max(max, std::max(poly->point_array[k].x, poly->point_array[k].y));
-                }
-            }
-        }
 
         // normaliser les sommets entre -1 et 1
         for (int m = 0; m < layers.size(); m++)
@@ -146,8 +127,8 @@ namespace Utils
                 {
                     Vec2& point = poly->point_array[k];
 
-                    point.x = ((point.x + std::abs(min)) / (std::abs(min) + max)) * 2.0 - 1.0;
-                    point.y = ((point.y + std::abs(min)) / (std::abs(min) + max)) * 2.0 - 1.0;
+                    point.x /= 100000;
+                    point.y /= 100000;
                     file << "v " << std::to_string(point.x) << " " << std::to_string(point.y) << " " << std::to_string(-m / 10.0) << "\n";
                 }
             }

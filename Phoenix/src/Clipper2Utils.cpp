@@ -17,14 +17,11 @@ namespace Clipper2Utils
 
         for (size_t i = 0; i < NB_POLYS; i++)
         {
-            Path64 path;
             Polygon* p = lib.cell_array[0]->polygon_array[i];
-            path.resize(p->point_array.count);
+            paths[i].resize(p->point_array.count);
 
             for (size_t m = 0; m < p->point_array.count; m++)
-                path[m] = std::move(Point64(p->point_array[m].x, p->point_array[m].y));
-
-            paths[i] = std::move(path);
+                paths[i][m] = std::move(Point64(p->point_array[m].x, p->point_array[m].y));
         }
 
         // free lib, all polygons are now in paths_list
@@ -66,32 +63,67 @@ namespace Clipper2Utils
         for (size_t i = 0; i < node.Count(); i++)
             GetGdstkPolygonsFromClipper2Tree(*node.Child(i), depth + 1, polys, epsilon);
 
+
         // ajouter le polygone plein et ses enfants comme trou
         if (!node.IsHole() && node.Polygon().size() > 0)
         {
             Polygon* poly = (Polygon*)allocate_clear(sizeof(Polygon));
-            Path64 simplified_poly = SimplifyPath(node.Polygon(), epsilon);
-
-            // ajouter le polygone plein
-            for (const Point64& point : simplified_poly)
-                poly->point_array.append(Vec2{ (double)point.x, (double)point.y });
-
-            // push le premier point pour fermer la boucle
-            Vec2 first{ simplified_poly.front().x, simplified_poly.front().y };
-            poly->point_array.append(first);
+            Path64 poly_parent = node.Polygon();
 
             // ajouter les polygones enfants au polygone gdstk
             for (size_t k = 0; k < node.Count(); k++)
             {
-                Path64 simplified_poly = SimplifyPath(node.Child(k)->Polygon(), epsilon);
+                Path64 current_path;
+                Path64 child_poly = node.Child(k)->Polygon();
+                int nb_points_parent = poly_parent.size();
+                int nb_points_child = child_poly.size();
+                double min_dist = INT32_MAX;
+                size_t parent_index = -1;
+                size_t child_index = -1;
 
-                for (const Point64& point : simplified_poly)
-                    poly->point_array.append(Vec2{ (double)point.x, (double)point.y });
+                // trouver les index du parent et enfant des sommets les plus proches
+                for (size_t a = 0; a < nb_points_parent; a++)
+                    for (size_t b = 0; b < node.Child(k)->Polygon().size(); b++)
+                    {
+                        if (a % 10 == 0) // pour éviter de parcourir tous les sommets
+                        {
+                            double dist = Distance(poly_parent[a], node.Child(k)->Polygon()[b]);
 
-                Vec2 child_first{ simplified_poly.front().x, simplified_poly.front().y };
-                poly->point_array.append(child_first);
-                poly->point_array.append(first);
+                            if (dist < min_dist)
+                            {
+                                min_dist = dist;
+                                parent_index = a;
+                                child_index = b;
+                            }
+                        }
+                    }
+
+                assert(parent_index != -1 && child_index != -1);
+
+                // ajouter les sommets du parent jusqu'au parent_index
+                for (size_t a = 0; a <= parent_index; a++)
+                    current_path.push_back(Point64{poly_parent[a].x, poly_parent[a].y});
+
+                // ajouter les sommets de l'enfant en partant de child_index
+                for (size_t a = 0; a < child_poly.size() + 1; a++)
+                {
+                    int temp = (child_index + a) % nb_points_child;
+                    current_path.push_back(Point64{ child_poly[temp].x, child_poly[temp].y });
+                }
+
+                // fermer le contour parent
+                for (size_t a = parent_index; a < nb_points_parent; a++)
+                {
+                    int temp = a % nb_points_parent;
+                    current_path.push_back(Point64{poly_parent[temp].x, poly_parent[temp].y });
+                }
+
+                poly_parent = current_path;
             }
+
+            // convertir current_path en polygone gdstk
+            for (const Point64& point : poly_parent)
+                poly->point_array.append(Vec2{(double)point.x, (double)point.y});
 
             polys.push_back(poly);
         }
@@ -100,6 +132,8 @@ namespace Clipper2Utils
 
     void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output, double epsilon)
     {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
         output.init("library", 1e-6, 1e-9);
 
         gdstk::Cell* cell = new Cell();
@@ -107,7 +141,7 @@ namespace Clipper2Utils
         output.cell_array.append(cell);
 
         std::vector<gdstk::Polygon*> polys;
-        GetGdstkPolygonsFromClipper2Tree(tree, 1, polys, epsilon);
+        GetGdstkPolygonsFromClipper2Tree(tree, 0, polys, epsilon);
 
         Array<gdstk::Polygon*> gdstk_polys = {};
 
@@ -115,6 +149,9 @@ namespace Clipper2Utils
             gdstk_polys.append(p);
 
         cell->polygon_array = gdstk_polys;
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "conversion polytree64 vers gdstk " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
     }
 
 
@@ -236,6 +273,7 @@ namespace Clipper2Utils
 
     void MakeTriangulationPolyTree(const PolyTree64& tree, Library& output)
     {
+        printf("\nTriangulation Clipper2\n");
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         Paths64 input = PolyTreeToPaths64(tree);
         Paths64 paths_output;

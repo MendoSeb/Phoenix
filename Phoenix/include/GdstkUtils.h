@@ -17,7 +17,7 @@ namespace GdstkUtils
 	Library LoadGDS(const char* fileName);
 
 	/* Sauvegarde les polygones en .gds */
-	void SaveToGdsii(Library& lib, const char* fileName);
+	void SaveToGdsii(Library& lib, const char* fileName, bool make_fracture);
 
 	/* Save OpenCV polys */
 	void SaveToGdsii(std::vector<std::vector<cv::Point2f>>& polys, const char* fileName);
@@ -25,15 +25,20 @@ namespace GdstkUtils
 	/* convertit les flex paths(chemins et cercles) en polygones pour faire l'union etc... */
 	void ConvertFlexPathsToPolygon(Library& lib);
 
+	void RepeatAndTranslateGdstkNoTransformV2(Library& lib, int rep_x, int rep_y, double width, double height);
+
+	/* Duplique le circuit y copris les flexpath */
+	void RepeatAndTranslateGdstkNoTransformV1(Library& lib, int rep_x, int rep_y, double width, double height);
+
 	/* duplique un circuit rep_x* rep_y fois en carré */
 	void RepeatAndTranslateGdstk(Library& lib, int rep_x, int rep_y, double width, double height);
 
 	/* normalise les coordonnées des points entre - 1e6 et 1e6 (pour la précision)
 	* la normalisation permet de ne pas avoir à choisir un nombre pour scale les coordonnées, car les
 	* fichiers .gds ne sont pas forcément représentés pareil( primaire: entre -10 et 10, solder: entre -300000 et 30000) */
-	void Normalize(Library& lib);
+	void Normalize(Library& lib, double limit = 1e5);
 
-	/* Découpe les polygones ayant plus de 8190 sommets en plusieurs polygones plus petits */
+	/* Divise les polygones ayant plus de 8190 sommets (pour la triangulation et le warning) */
 	void MakeFracture(Library& lib);
 
 	/* Applique l'union aux polygones de type gdstk */
