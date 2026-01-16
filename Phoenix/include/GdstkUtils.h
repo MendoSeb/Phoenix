@@ -7,7 +7,8 @@
 using namespace gdstk;
 
 using earcutPoint = std::array<double, 2>;
-using earcutPolys = std::vector<std::vector<std::vector<earcutPoint>>>;
+using earcutPoly = std::vector<std::vector<earcutPoint>>;
+using earcutPolys = std::vector<earcutPoly>;
 using earcutLayer = std::pair<earcutPolys, std::vector<std::vector<uint32_t>>>;
 
 

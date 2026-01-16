@@ -380,12 +380,46 @@ void Optix::render()
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration_ms = (end - start);
     std::cout << 1000.0f / (duration_ms.count() / nbIter) << " fps" << std::endl;
+}
 
-    cudaDeviceSynchronize();
-    cudaFree(reinterpret_cast<void*>(d_param));
 
-    saveDeviceArrayToFile(output_buffer_d, width, height, "output.txt");
-    saveGrayscaleBitmapCuda("output.bmp", width, height, output_buffer_d);
+void Optix::DMDSimulation()
+{
+	CUstream stream, streamcpy;
+	cudaStreamCreate(&stream);
+	cudaStreamCreate(&streamcpy);
+	Params params;
+
+	unsigned char* output_buffer;
+	output_buffer = (unsigned char*)malloc(width * height);
+	unsigned char* output_buffer_d;
+	cudaMalloc((void**)(&output_buffer_d), width * height);
+	params.image = output_buffer_d;
+	params.image_width = width;
+	params.image_height = height;
+	params.handle = gas_handle;
+	params.cam_u = make_float3(0.828427136f, 0.0f, 0.0f);
+	params.cam_v = make_float3(0.0f, 0.828427136, 0.0f);
+	params.cam_w = make_float3(0.0f, 0.0f, 1.0f);
+	params.cam_eye = make_float3(0.0f, 0.0f, 5.0f);
+
+	// creation d'un rendu
+	CUdeviceptr d_param;
+	cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
+	cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
+
+	auto start = std::chrono::high_resolution_clock::now();
+
+    int nb_step_x = 2e5 / 4096;
+    int nb_step_y = 2e5 / (2176 + 17);
+    //char* img = new char[];
+
+    for (size_t x = 0; x < nb_step_x; x++)
+        for (size_t y = 0; y < nb_step_y; y++)
+        {
+            params.cam_eye = make_float3(x - 1e5, y - 1e5, 5.0f);
+            optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, /*depth=*/1);
+        }
 }
 
 

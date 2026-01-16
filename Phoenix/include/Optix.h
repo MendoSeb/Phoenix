@@ -223,6 +223,9 @@ public:
     /* Rendu de l'image */
     void render();
 
+    /* Simule le déplacement d'un DMD pour faire la sous-pixelisation */
+	void DMDSimulation();
+
     /* Sauvegarde l'image en .txt */
     template<typename T>
     void saveDeviceArrayToFile(const T* device_array, size_t width, size_t height, const std::string& filename);

@@ -58,11 +58,50 @@ namespace Utils
     }
 
 
+    std::vector<earcutLayer> EarcutTriangulation(earcutPolys& polys)
+    {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        earcutLayer layer;
+        int vertex_sum = 0;
+
+        for (earcutPoly& poly : polys)
+        {
+            std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(poly);
+
+            // pour indexer correctement les sommets avec les triangles
+            for (uint32_t& index : indices)
+                index += vertex_sum;
+
+            // incrémente le nombre de sommets
+            for (std::vector<earcutPoint>& contour : poly)
+                vertex_sum += contour.size();
+
+            layer.first.push_back(poly);
+            layer.second.push_back(indices);
+        }        
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "Triangulation earcut faite en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+        return { layer };
+    }
+
+
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         std::ofstream file(filename);
+		double min = INT32_MAX;
+		double max = INT32_MIN;
+
+        for (char i = 0; i < layers.size(); i++)
+			for (std::vector<std::vector<earcutPoint>>& poly : layers[i].first)
+				for (std::vector<earcutPoint>& poly_sub : poly)
+                    for (earcutPoint& point : poly_sub)
+                    {
+                        min = std::min(min, std::min(point[0], point[1]));
+                        max = std::max(max, std::max(point[0], point[1]));
+                    }
 
         // écrire les sommets comme entiers, les doubles mettent du temps à être écrits (environ x2)
         for (char i = 0; i < layers.size(); i++)
@@ -70,8 +109,8 @@ namespace Utils
                 for (std::vector<earcutPoint>& poly_sub : poly)
                     for (earcutPoint& point : poly_sub)
                     {
-                        file << "v "<< std::to_string(point[0] / 100000)
-                             << " " << std::to_string(point[1] / 100000)
+                        file << "v "<< std::to_string(point[0])
+                             << " " << std::to_string(point[1])
                              << " " << std::to_string(i) << "\n";
                     }
 

@@ -5,6 +5,7 @@
 #include "clipper.triangulation.h"
 #include <thread>
 #include <mutex>
+#include "GdstkUtils.h"
 
 
 using namespace gdstk;
@@ -18,11 +19,14 @@ namespace Clipper2Utils
 	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree en polygones gdstk (avec trous)
-	void GetGdstkPolygonsFromClipper2Tree(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys, double epsilon);
+	void GetTreeLayerGdstkRecursive(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys, double epsilon);
+
+	/* Fonction recusrive pour parcourir l'arbre et extraire les polygones en earcut */
+	void GetTreeLayerEarcutRecursive(PolyTree64& node, earcutPolys& polys);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree sous forme de couches
 	// (hauteur de l'arbre 0 = polygones pleins, 1 = trous, 2 = pleins etc...)
-	void GetTreeLayers(PolyTree64& node, int depth, std::vector<Paths64>& layers);
+	void GetTreeLayersRecursive(PolyTree64& node, int depth, std::vector<Paths64>& layers);
 
 	// Convertit des polygones Paths64 en polygones gdstk (Library)
 	Library ConvertPaths64ToGdsii(const Paths64& polys, double epsilon);
