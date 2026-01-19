@@ -19,7 +19,7 @@ namespace Clipper2Utils
 	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree en polygones gdstk (avec trous)
-	void GetTreeLayerGdstkRecursive(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys, double epsilon);
+	void GetTreeLayerGdstkRecursive(PolyTree64& node,std::vector<gdstk::Polygon*>& polys);
 
 	/* Fonction recusrive pour parcourir l'arbre et extraire les polygones en earcut */
 	void GetTreeLayerEarcutRecursive(PolyTree64& node, earcutPolys& polys);
@@ -29,13 +29,16 @@ namespace Clipper2Utils
 	void GetTreeLayersRecursive(PolyTree64& node, int depth, std::vector<Paths64>& layers);
 
 	// Convertit des polygones Paths64 en polygones gdstk (Library)
-	Library ConvertPaths64ToGdsii(const Paths64& polys, double epsilon);
+	Library ConvertPaths64ToGdsii(const Paths64& polys);
 
 	// Convertit un polytree64 en une polygones gdstk (avec trous)
-	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output, double epsilon);
+	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output);
 
 	// convertit un polytree64 en polygones gdstk triés par couches
 	std::vector<Library> ConvertPolyTree64ToGdsiiLayers(PolyTree64& tree);
+
+	/* Triangule les polygones chargés avec gdstk sans faire d'union (pour garder des triangulations simples) */
+	void TriangulateWithoutUnion();
 
 	///* opérations de base *///
 	// Fait l'union des polygones polys

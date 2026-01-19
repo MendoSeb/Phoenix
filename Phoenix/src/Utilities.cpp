@@ -86,22 +86,22 @@ namespace Utils
     }
 
 
+    void SplitEarcutPolygons(earcutPolys& polys)
+    {
+        for (earcutPoly& poly : polys)
+        {
+            Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
+
+
+        }
+    }
+
+
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         std::ofstream file(filename);
-		double min = INT32_MAX;
-		double max = INT32_MIN;
-
-        for (char i = 0; i < layers.size(); i++)
-			for (std::vector<std::vector<earcutPoint>>& poly : layers[i].first)
-				for (std::vector<earcutPoint>& poly_sub : poly)
-                    for (earcutPoint& point : poly_sub)
-                    {
-                        min = std::min(min, std::min(point[0], point[1]));
-                        max = std::max(max, std::max(point[0], point[1]));
-                    }
 
         // écrire les sommets comme entiers, les doubles mettent du temps à être écrits (environ x2)
         for (char i = 0; i < layers.size(); i++)

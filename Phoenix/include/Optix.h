@@ -65,6 +65,7 @@ struct Params
     unsigned char* image;
     unsigned int           image_width;
     unsigned int           image_height;
+    unsigned int           total_pixels;
     float3                 cam_eye; // position de la caméra
     float3                 cam_u, cam_v, cam_w; // orientation de la caméra
     OptixTraversableHandle handle;
@@ -108,13 +109,7 @@ private:
 #define OPTIX_CHECK( call )                                                    \
     optixCheck( call, #call, __FILE__, __LINE__ )
 
-// This version of the log-check macro doesn't require the user do setup
-// a log buffer and size variable in the surrounding context; rather the
-// macro defines a log buffer and log size variable (LOG and LOG_SIZE)
-// respectively that should be passed to the message being checked.
-// E.g.:
-//  OPTIX_CHECK_LOG2( optixProgramGroupCreate( ..., LOG, &LOG_SIZE, ... );
-//
+
 #define OPTIX_CHECK_LOG( call )                                                \
     do                                                                         \
     {                                                                          \
@@ -176,6 +171,8 @@ class Optix
 {
 private:
     int width, height; // dimension de l'image à calculer
+    std::pair<float, float> x_limit;
+    std::pair<float, float> y_limit;
 
     OptixDeviceContext context = nullptr;
     OptixModule module = nullptr;
@@ -226,10 +223,6 @@ public:
     /* Simule le déplacement d'un DMD pour faire la sous-pixelisation */
 	void DMDSimulation();
 
-    /* Sauvegarde l'image en .txt */
-    template<typename T>
-    void saveDeviceArrayToFile(const T* device_array, size_t width, size_t height, const std::string& filename);
-
     /* Sauvegarde l'image en .bmp */
-    void saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* dev_data);
+    void saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* img);
 };

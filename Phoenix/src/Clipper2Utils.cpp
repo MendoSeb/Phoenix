@@ -3,38 +3,35 @@
 #include <string>
 #include "clipper2/clipper.h" // Ajouté pour TriangulatePaths
 #include <GdstkUtils.h>
+#include <thread>
+#include <Utilities.h>
 
 
 namespace Clipper2Utils
 {
 	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib)
 	{
+		assert(lib.cell_array.count == 1);
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		assert(lib.cell_array.count == 1); // pour simplifier le code et la gestion des threads
-
 		Paths64 paths;
-		int NB_POLYS = lib.cell_array[0]->polygon_array.count;
-		paths.resize(NB_POLYS);
+		paths.resize(lib.cell_array[0]->polygon_array.count);
 
-		for (size_t i = 0; i < NB_POLYS; i++)
+		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
 		{
 			Polygon* p = lib.cell_array[0]->polygon_array[i];
 			paths[i].resize(p->point_array.count);
 
 			for (size_t m = 0; m < p->point_array.count; m++)
-				paths[i][m] = std::move(Point64(p->point_array[m].x, p->point_array[m].y));
+				paths[i][m] = Point64(p->point_array[m].x, p->point_array[m].y);
 		}
-
-		// free lib, all polygons are now in paths_list
-		lib.clear();
-
+		
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Polygones convertis en polygones clipper2 en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
 		return paths;
 	}
 
 
-	Library ConvertPaths64ToGdsii(const Paths64& polys, double epsilon)
+	Library ConvertPaths64ToGdsii(const Paths64& polys)
 	{
 		gdstk::Library lib = {};
 		lib.init("library", 1e-6, 1e-9);
@@ -57,12 +54,11 @@ namespace Clipper2Utils
 	}
 
 
-	void GetTreeLayerGdstkRecursive(PolyTree64& node, int depth, std::vector<gdstk::Polygon*>& polys, double epsilon)
+	void GetTreeLayerGdstkRecursive(PolyTree64& node, std::vector<gdstk::Polygon*>& polys)
 	{
 		// parcourir l'arbre
 		for (size_t i = 0; i < node.Count(); i++)
-			GetTreeLayerGdstkRecursive(*node.Child(i), depth + 1, polys, epsilon);
-
+			GetTreeLayerGdstkRecursive(*node.Child(i), polys);
 
 		// ajouter le polygone plein et ses enfants comme trou
 		if (!node.IsHole() && node.Polygon().size() > 0)
@@ -80,25 +76,21 @@ namespace Clipper2Utils
 				double min_dist = INT32_MAX;
 				size_t parent_index = -1;
 				size_t child_index = -1;
+				int step = 100;
 
 				// trouver les index du parent et enfant des sommets les plus proches
-				for (size_t a = 0; a < nb_points_parent; a++)
+				for (size_t a = 0; a < nb_points_parent; a += step)
 					for (size_t b = 0; b < node.Child(k)->Polygon().size(); b++)
 					{
-						if (a % 10 == 0) // pour éviter de parcourir tous les sommets
-						{
-							double dist = Distance(poly_parent[a], node.Child(k)->Polygon()[b]);
+						double dist = Distance(poly_parent[a], node.Child(k)->Polygon()[b]);
 
-							if (dist < min_dist)
-							{
-								min_dist = dist;
-								parent_index = a;
-								child_index = b;
-							}
+						if (dist < min_dist)
+						{
+							min_dist = dist;
+							parent_index = a;
+							child_index = b;
 						}
 					}
-
-				assert(parent_index != -1 && child_index != -1);
 
 				// ajouter les sommets du parent jusqu'au parent_index
 				for (size_t a = 0; a <= parent_index; a++)
@@ -130,7 +122,7 @@ namespace Clipper2Utils
 	}
 
 
-	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output, double epsilon)
+	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -141,7 +133,7 @@ namespace Clipper2Utils
 		output.cell_array.append(cell);
 
 		std::vector<gdstk::Polygon*> polys;
-		GetTreeLayerGdstkRecursive(tree, 0, polys, epsilon);
+		GetTreeLayerGdstkRecursive(tree, polys);
 
 		Array<gdstk::Polygon*> gdstk_polys = {};
 
@@ -215,9 +207,31 @@ namespace Clipper2Utils
 		std::vector<Library> layers;
 
 		for (size_t i = 0; i < paths64_layers.size(); i++)
-			layers.push_back(ConvertPaths64ToGdsii(paths64_layers[i], 0));
+			layers.push_back(ConvertPaths64ToGdsii(paths64_layers[i]));
 
 		return layers;
+	}
+
+
+	void TriangulateWithoutUnion()
+	{
+		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+		Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+		//Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+		GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 12, 12);
+		//GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 300000, 300000);
+		GdstkUtils::Normalize(lib1);
+		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib1);
+
+		Library lib = {};
+		Clipper2Utils::MakeTriangulationPaths(paths, lib);
+
+		std::vector<Library> layers = { lib };
+		Utils::WriteLibraryToObj(layers, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_clipper2_monocouche_v2.obj");
+
+		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+		std::cout << "Triangulation monocouche V2 (sans union) en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 	}
 
 
@@ -315,7 +329,7 @@ namespace Clipper2Utils
 		Paths64 paths_output;
 
 		Triangulate(input, paths_output, false);
-		output = ConvertPaths64ToGdsii(paths_output, 0);
+		output = ConvertPaths64ToGdsii(paths_output);
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Triangulation faite: " << paths_output.size() << " en: "
@@ -337,7 +351,7 @@ namespace Clipper2Utils
 			final.insert(final.end(), path_output.begin(), path_output.end());
 		}
 
-		output = ConvertPaths64ToGdsii(final, 0);
+		output = ConvertPaths64ToGdsii(final);
 	}
 }
 

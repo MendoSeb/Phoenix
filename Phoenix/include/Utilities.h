@@ -22,6 +22,9 @@ namespace Utils
     /* Applique la triangulation earcut à une série de liste de polygones earcut */
     std::vector<earcutLayer> EarcutTriangulation(earcutPolys& polys);
 
+    /* Divise les polygones earcut ayant plus de 10000 sommets */
+    void SplitEarcutPolygons(earcutPolys& polys);
+
     /* Sauvegarde des séries de liste de polygones de type earcut en .obj */
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename);
 

@@ -21,18 +21,21 @@ extern "C" __global__ void __raygen__rg() {
     const unsigned int launch_dim_y = optixGetLaunchDimensions().y;
 
     // 2. Coordonnées normalisées dans l'espace de l'image (-1 à 1)
-    float ratio = 4096.0f / 2176.0f;
-    float zoom = 1.0f;
+    float ratio = 2176.0f / 4096.0f;
 
-    float u_normalized = (((float)x / (float)launch_dim_x * 2.0f - 1.0f) * ratio) / zoom;
-    float v_normalized = (((float)y / (float)launch_dim_y * 2.0f - 1.0f)) / zoom;
+    float3 ray_origin = float3{ 
+        params.cam_eye.x + x,
+        params.cam_eye.y + y, 
+        params.cam_eye.z 
+    };
 
-    float3 ray_origin = float3{ u_normalized + params.cam_eye.x, v_normalized + params.cam_eye.y, params.cam_eye.z };
-    //float3 ray_direction = params.cam_w + u_normalized * params.cam_u + v_normalized * params.cam_v;
     float3 ray_direction = float3{ 0.0f, 0.0f, -1.0f };
 
     float t_min = 0.0f;
     float t_max = 1e16f;
+
+    int x2 = ray_direction.x;
+    int y2 = ray_direction.y;
 
     unsigned int visibility_mask = 1;
     unsigned int Val = 0; 
@@ -54,8 +57,10 @@ extern "C" __global__ void __raygen__rg() {
     );
     Val |= p0;
 
-    params.image[y * params.image_width + x] = Val;
+    int pixel_index = (int)ray_origin.y * params.image_width + (int)ray_origin.x;
 
+    if (pixel_index >= 0 && pixel_index < params.total_pixels)
+        params.image[pixel_index] = Val;
 }
 
 
