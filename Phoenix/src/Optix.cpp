@@ -13,6 +13,7 @@
 #include <chrono>
 #include <vector>
 #include <sstream>
+#include <gdstk/vec.hpp>
 
 
 Optix::Optix(int width, int height) : width(width), height(height) 
@@ -153,8 +154,8 @@ int Optix::init()
     // Configure les options de la pipeline
     pipeline_options.usesMotionBlur = false;
     pipeline_options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
-    pipeline_options.numPayloadValues = 3;
-    pipeline_options.numAttributeValues = 3;
+    pipeline_options.numPayloadValues = 1;
+    pipeline_options.numAttributeValues = 1;
     pipeline_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
     pipeline_options.pipelineLaunchParamsVariableName = "params";
     pipeline_options.usesPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
@@ -172,6 +173,12 @@ int Optix::init()
 
     std::string ptx_source(file_size, '\0');
     ptx_file.read(&ptx_source[0], file_size);
+
+    // Niveau d'optimisation maximum (Lvl 3)
+    module_options.optLevel = OPTIX_COMPILE_OPTIMIZATION_LEVEL_3;
+
+    // Facultatif : Désactiver les symboles de debug pour gagner encore en perf
+    module_options.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
 
     // Crée un module 
     OPTIX_CHECK_LOG(optixModuleCreate(
@@ -264,7 +271,7 @@ CUdeviceptr Optix::initScene()
     // Use default options for simplicity.  In a real use case we would want to
     // enable compaction, etc
     OptixAccelBuildOptions accel_options = {};
-    accel_options.buildFlags = OPTIX_BUILD_FLAG_NONE;
+    accel_options.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
     accel_options.operation = OPTIX_BUILD_OPERATION_BUILD;
 
     float3* vertices = nullptr;
@@ -372,7 +379,7 @@ void Optix::render()
     params.cam_u = make_float3(0.828427136f, 0.0f, 0.0f);
     params.cam_v = make_float3(0.0f, 0.828427136, 0.0f);
     params.cam_w = make_float3(0.0f, 0.0f, 1.0f);
-    params.cam_eye = make_float3(0.0f, 0.0f, 5.0f); // reculer assez car en multi couche c'est épais
+    params.cam_eye = make_float3(0.0f, 0.0f, 1.0f); // reculer assez car en multi couche c'est épais
     //params.cam_eye = make_float3(0.3f, 0.24f, 5.0f);
 
     //creation d'un rendu
@@ -404,20 +411,23 @@ void Optix::DMDSimulation()
     cudaStreamCreate(&streamcpy);
 
     // real sizes in cm
-    int sp = 5;
+    // taille réelle de la partie miroir du dmd
+    float dmd_real_width = 2.21f;
+    float dmd_real_height = 1.74f;
 
+    // taille réelle du circuit à imprimé
+    float circuit_real_width = 2.0f;
+    float circuit_real_height = 2.0f;
+
+    // nombre de pixels dans le dmd
     int dmd_pixel_width = 4096;
     int dmd_pixel_height = 2176;
 
-    int dmd_real_width = 2.21;
-    int dmd_real_height = 1.74;
-
-    int circuit_real_width = 4;
-    int circuit_real_height = 4;
+    int sp = 8; // sous pixélisation
 
     // image size
-    int img_width = (circuit_real_width / dmd_real_width) * dmd_pixel_width * sp;
-    int img_height = (circuit_real_height / dmd_real_height) * dmd_pixel_height * sp;
+    int img_width = std::ceil(circuit_real_width / dmd_real_width) * dmd_pixel_width * sp;
+    int img_height = std::ceil(circuit_real_height / dmd_real_height) * dmd_pixel_height * sp;
 
     std::cout << img_width << " x " << img_height << std::endl;
     std::cout << "Image size: " << ((float)img_width * (float)img_height) / 1000000000.0f << " Go" << std::endl;
@@ -437,7 +447,6 @@ void Optix::DMDSimulation()
 	params.cam_u = make_float3(0.828427136f, 0.0f, 0.0f);
 	params.cam_v = make_float3(0.0f, 0.828427136, 0.0f);
 	params.cam_w = make_float3(0.0f, 0.0f, 1.0f);
-	params.cam_eye = make_float3(0.0f, 0.0f, 5.0f);
 
 	// creation d'un rendu
 	CUdeviceptr d_param;
@@ -454,28 +463,22 @@ void Optix::DMDSimulation()
     std::cout << "Nb images to calculate: " << nb_images_to_calculate << std::endl;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    gdstk::Vec2 dmd_direction{1.0f / (sp^2), 1.0f / sp + (dmd_pixel_height / (sp^2))};
 
-    for (int k = 0; k < nb_step_x; k++)
+    for (int k = 0; k < nb_step_x; k++) // nombre de dmd en x
     {
-        for (int n = 0; n < nb_step_y; n++)
+        params.cam_eye = make_float3(init_pos_x + k * dmd_pixel_width, init_pos_y, 1.0f);
+
+        for (float i = 0; i < nb_step_y * (sp ^ 2); i++) // nb_step_y (nb dmd) * sp^2 déplacements pour faire de la sous pixélisation sp X sp
         {
-            for (float i = 0; i < sp; i++) // tous les 272 pixels (pour 1/8)
+            if (i > 0)
             {
-                for (float p = 0; p < sp; p++) // tous les 34 pixels (pour 1/8)
-                {
-                    params.x_sp_index = i;
-                    params.y_sp_index = p;
-
-                    params.cam_eye = make_float3(
-                        init_pos_x + k * dmd_pixel_width + i / (float)sp,
-                        init_pos_y + n * dmd_pixel_height + p * dmd_pixel_height / (sp ^ 2) + i + p / (float)sp,
-                        5.0f
-                    );
-
-                    cudaMemcpyAsync(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
-                    optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, 1);
-                }
+                params.cam_eye.x += dmd_direction.x;
+                params.cam_eye.y += dmd_direction.y;
             }
+
+            cudaMemcpyAsync(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
+            optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, 1);
         }
     }
 
@@ -497,7 +500,7 @@ void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int 
     for (int i = 0; i < width * height; i++)
     {
         if (hostData[i] > 0)
-            hostData[i] = 50 + rand() % 206;
+            hostData[i] = 80 + rand() % 176;
     }
 
     // Check for CUDA errors

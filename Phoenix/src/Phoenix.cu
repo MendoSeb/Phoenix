@@ -19,19 +19,23 @@ extern "C" __global__ void __raygen__rg()
 
     float3 ray_origin = float3{
         params.cam_eye.x + x,
-        params.cam_eye.y + y, 
-        params.cam_eye.z 
+        params.cam_eye.y + y,
+        params.cam_eye.z
     };
+
+    float3 temp = ray_origin;
+    temp.x += 3000;
+    temp.y += 3000;
 
     float3 ray_direction = float3{ 0.0f, 0.0f, -1.0f };
 
     float t_min = 0.0f;
     float t_max = 1e16f;
-    unsigned int p0;
+    unsigned int p0 = 0;
         
     optixTrace(
         params.handle,      // Les paramètres de la caméra (pourrait être un espace vide)
-        ray_origin,         // Point d'origine du rayon
+        temp,         // Point d'origine du rayon
         ray_direction,      // Direction du rayon (avec distorsion)
         t_min,
         t_max,
@@ -48,9 +52,14 @@ extern "C" __global__ void __raygen__rg()
     {
         for (int iy = 0; iy < params.sp; iy++)
         {
-            int pixel_index = ((int)(ray_origin.y + params.min_y) * params.sp + iy + params.y_sp_index) * params.image_width
-                + ((int)(ray_origin.x + params.min_x) * params.sp + ix + params.x_sp_index);
+            int pixel_index =
+                ((int)round((ray_origin.y + params.min_y) * params.sp) // calcul l'emplacement du pixel de taille: sp X sp (en y)
+                + iy) // ajoute le décalage pour parcourir les voisins (en y)
+                * params.image_width // pour enregistrer dans le tableau 1D
+                + ((int)round((ray_origin.x + params.min_x) * params.sp)  // calcul l'emplacement du pixel de taille: sp X sp (en x)
+                + ix); // ajoute le décalage pour parcourir les voisins (en x)
 
+            // modifier le pixel que si on est dans l'image
             if (pixel_index >= 0 && pixel_index < params.total_pixels)
                 params.image[pixel_index] |= p0;
         }
