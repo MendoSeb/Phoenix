@@ -66,6 +66,11 @@ struct Params
     unsigned int           image_width;
     unsigned int           image_height;
     unsigned int           total_pixels;
+    unsigned int           sp;
+    unsigned int           y_sp_index;
+    unsigned int           x_sp_index;
+    float                  min_x;
+    float                  min_y;
     float3                 cam_eye; // position de la caméra
     float3                 cam_u, cam_v, cam_w; // orientation de la caméra
     OptixTraversableHandle handle;

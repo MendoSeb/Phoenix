@@ -231,13 +231,17 @@ namespace GdstkUtils
 	}
 
 
-	void Normalize(Library& lib, double limit)
+	void Normalize(Library& lib, Vec2&& real_dim_cm)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
 		assert(lib.cell_array.count == 1);
-		double min = INT64_MAX;
-		double max = INT64_MIN;
+		double min = DBL_MAX;
+		double max = DBL_MIN;
+		double micron = 0.0001; // in cm
+
+		// nombre de miroirs dmd qu'on peut caler dans le circuit dans sa plus grande dimension
+		double scale = std::max(real_dim_cm.x / micron, real_dim_cm.y / micron) / 2.0;
 
 		// find minimum and maximum coordinate
 		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
@@ -253,8 +257,8 @@ namespace GdstkUtils
 			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
 			{
 				Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
-				p.x = (((std::abs(min) + p.x) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
-				p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * limit;
+				p.x = (((std::abs(min) + p.x) / (std::abs(min) + max)) * 2.0 - 1.0) * scale;
+				p.y = (((std::abs(min) + p.y) / (std::abs(min) + max)) * 2.0 - 1.0) * scale;
 			}
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();

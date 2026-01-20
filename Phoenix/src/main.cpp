@@ -25,7 +25,7 @@ void BoostGeometryDemo()
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds");
 
 	GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12);
-	GdstkUtils::Normalize(lib);
+	GdstkUtils::Normalize(lib, Vec2{10, 10});
 	multi_polygon_t polys = BoostUtils::ConvertGdstkToBoostPolygon(lib);
 
 	multi_polygon_t u_polys = BoostUtils::MakeUnion(polys);
@@ -39,8 +39,8 @@ void Clipper2Demo()
 
 	// duplicate
 	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 12, 12); // pour solder.gds
-	GdstkUtils::Normalize(lib);
+	GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12); // pour solder.gds
+	GdstkUtils::Normalize(lib, Vec2{30, 30});
 
 	Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
 
@@ -55,9 +55,9 @@ void Clipper2Demo()
 	paths.clear();
 
 	// inverse
-	Clipper2Utils::MakeInverse(u, inverse);
+	/*Clipper2Utils::MakeInverse(u, inverse);
 	Clipper2Utils::ConvertPolyTree64ToGdsiiPath(inverse, inverse_lib);
-	GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str(), false);
+	GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str(), false); */
 
 	// triangulation avec clipper2
 	/* Clipper2Utils::MakeTriangulationPolyTree(u, clipper2_lib);
@@ -73,6 +73,7 @@ void Clipper2Demo()
 	clipper2_inverse_lib.clear(); */
 	inverse.Clear();
 
+	/*
 	// degraissement
 	Clipper2Utils::MakeDegraissement(u, -1, deg);
 	Clipper2Utils::ConvertPolyTree64ToGdsiiPath(deg, deg_lib);
@@ -83,7 +84,7 @@ void Clipper2Demo()
 	Clipper2Utils::ConvertPolyTree64ToGdsiiPath(diff, diff_lib);
 	GdstkUtils::SaveToGdsii(diff_lib, (root_path + "difference.gds").c_str(), false);
 	deg.Clear();
-	diff.Clear();
+	diff.Clear();*/
 
 	// triangulation of union in one layer with earcut
 	GdstkUtils::MakeFracture(u_lib);
@@ -108,7 +109,7 @@ void GdstkDemo()
 
 	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
 	GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12); // factor moins grand qu'avec clipper car pas de conversion en int64_t
-	GdstkUtils::Normalize(lib);
+	GdstkUtils::Normalize(lib, Vec2{10, 10});
 
 	// scale pour la précision et union
 	Library u_lib = GdstkUtils::MakeUnion(lib);
@@ -143,9 +144,9 @@ void OptixDemo()
 	CUdeviceptr d_tris = o.initScene();
 	o.initPipeline(d_tris);
 
-	o.render();
+	//o.render();
 
-	//o.DMDSimulation();
+	o.DMDSimulation();
 }
 
 
@@ -295,10 +296,10 @@ void WarpingDemo3()
 int main()
 {
 	//BoostGeometryDemo();
-	Clipper2Demo();
+	//Clipper2Demo();
 	//GdstkDemo();
 
-	//OptixDemo();
+	OptixDemo();
 
 	//WarpingDemo1();
 	//WarpingDemo2();

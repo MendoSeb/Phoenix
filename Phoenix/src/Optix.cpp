@@ -17,11 +17,14 @@
 
 Optix::Optix(int width, int height) : width(width), height(height) 
 {
-    x_limit.first = 1e10;
-    x_limit.second = -1e10;
+    gas_handle = 0;
+    d_gas_output_buffer = 0;
 
-    y_limit.first = 1e10;
-    y_limit.second = -1e10;
+    x_limit.first = FLT_MAX;
+    x_limit.second = FLT_MIN;
+
+    y_limit.first = FLT_MAX;
+    y_limit.second = FLT_MIN;
 }
 
 
@@ -272,8 +275,8 @@ CUdeviceptr Optix::initScene()
     void* d_vertices = nullptr;
     CUdeviceptr d_tris;
 
-    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_clipper2.obj", objVertices, objTriangles);
-    loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
+    loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
+    //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
     //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_multi_couches_earcut.obj", objVertices, objTriangles);
     //loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_clipper2_multi_couche_v2.obj", objVertices, objTriangles);
 
@@ -396,37 +399,40 @@ void Optix::render()
 
 void Optix::DMDSimulation()
 {
-	CUstream stream, streamcpy;
-	cudaStreamCreate(&stream);
-	cudaStreamCreate(&streamcpy);
+    CUstream stream, streamcpy;
+    cudaStreamCreate(&stream);
+    cudaStreamCreate(&streamcpy);
 
     // real sizes in cm
-    int nb_miror_width = 4096;
-    int nb_miror_height = 2176;
+    int sp = 5;
+
+    int dmd_pixel_width = 4096;
+    int dmd_pixel_height = 2176;
 
     int dmd_real_width = 2.21;
     int dmd_real_height = 1.74;
 
-    int circuit_real_width = 2.21 * 4;
-    int circuit_real_height = 1.74 * 4;
-
-    int sous_pixelisation = 1;
+    int circuit_real_width = 4;
+    int circuit_real_height = 4;
 
     // image size
-    int img_width = (circuit_real_width / dmd_real_width) * nb_miror_width * sous_pixelisation;
-    int img_height = (circuit_real_height / dmd_real_height) * nb_miror_height * sous_pixelisation;
+    int img_width = (circuit_real_width / dmd_real_width) * dmd_pixel_width * sp;
+    int img_height = (circuit_real_height / dmd_real_height) * dmd_pixel_height * sp;
 
     std::cout << img_width << " x " << img_height << std::endl;
-    std::cout << "Image size: " << ((float)img_width*(float)img_height) / 1000000000.0f << " Go" << std::endl;
+    std::cout << "Image size: " << ((float)img_width * (float)img_height) / 1000000000.0f << " Go" << std::endl;
 
     unsigned char* output_buffer_d;
     cudaMalloc((void**)(&output_buffer_d), img_width * img_height);
 
     Params params;
-	params.image = output_buffer_d;
-	params.image_width = nb_miror_width;
-	params.image_height = nb_miror_height;
+    params.image = output_buffer_d;
+    params.image_width = img_width;
+    params.image_height = img_height;
     params.total_pixels = img_width * img_height;
+    params.sp = sp;
+    params.min_x = abs(x_limit.first);
+    params.min_y = abs(y_limit.first);
 	params.handle = gas_handle;
 	params.cam_u = make_float3(0.828427136f, 0.0f, 0.0f);
 	params.cam_v = make_float3(0.0f, 0.828427136, 0.0f);
@@ -438,28 +444,45 @@ void Optix::DMDSimulation()
     cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
     cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
 
-    int nb_step_x = (circuit_real_height / dmd_real_height);
-    int nb_step_y = (circuit_real_width / dmd_real_width);
+    float init_pos_x = x_limit.first;
+    float init_pos_y = y_limit.first;
 
-    int y_step_size = (y_limit.second - y_limit.first) / nb_step_y;
-    int x_step_size = (x_limit.second - x_limit.first) / nb_step_x;
+    int nb_step_x = std::ceil(circuit_real_width / dmd_real_width);
+    int nb_step_y = std::ceil(circuit_real_height / dmd_real_height);
 
-    for (size_t k = 0; k < 3; k++)
+    int nb_images_to_calculate = nb_step_x * nb_step_y * sp^2;
+    std::cout << "Nb images to calculate: " << nb_images_to_calculate << std::endl;
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+    for (int k = 0; k < nb_step_x; k++)
     {
-        for (size_t i = 0; i < nb_step_y; i++)
+        for (int n = 0; n < nb_step_y; n++)
         {
-            int x = x_limit.first + k * x_step_size;
-            int y = y_limit.first + i * y_step_size;
-            params.cam_eye = make_float3(x, y, 5.0f);
+            for (float i = 0; i < sp; i++) // tous les 272 pixels (pour 1/8)
+            {
+                for (float p = 0; p < sp; p++) // tous les 34 pixels (pour 1/8)
+                {
+                    params.x_sp_index = i;
+                    params.y_sp_index = p;
 
-            Params temp_param;
-            cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params),
-                cudaMemcpyHostToDevice);
+                    params.cam_eye = make_float3(
+                        init_pos_x + k * dmd_pixel_width + i / (float)sp,
+                        init_pos_y + n * dmd_pixel_height + p * dmd_pixel_height / (sp ^ 2) + i + p / (float)sp,
+                        5.0f
+                    );
 
-            optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, 1);
+                    cudaMemcpyAsync(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
+                    optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, 1);
+                }
+            }
         }
     }
-            
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    float time_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+    std::cout << "Simulation DMD en " << time_elapsed << " ms" << std::endl;
+    std::cout << "Fps: " << 1000.0f / (time_elapsed / nb_images_to_calculate) << std::endl;
 
     saveGrayscaleBitmapCuda("output.bmp", img_width, img_height, output_buffer_d);
 }
@@ -469,7 +492,13 @@ void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int 
     
     // 1. Copy GPU data to a CPU buffer (Host)
     unsigned char* hostData = new unsigned char[width * height];
-    cudaMemcpy(hostData, img, width * height, cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(hostData, img, width * height, cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < width * height; i++)
+    {
+        if (hostData[i] > 0)
+            hostData[i] = 50 + rand() % 206;
+    }
 
     // Check for CUDA errors
     cudaError_t err = cudaGetLastError();

@@ -22,7 +22,7 @@ namespace Clipper2Utils
 			paths[i].resize(p->point_array.count);
 
 			for (size_t m = 0; m < p->point_array.count; m++)
-				paths[i][m] = Point64(p->point_array[m].x, p->point_array[m].y);
+				paths[i][m] = Point64((uint64_t)p->point_array[m].x, (uint64_t)p->point_array[m].y);
 		}
 		
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -221,7 +221,7 @@ namespace Clipper2Utils
 		//Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
 		GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 12, 12);
 		//GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 300000, 300000);
-		GdstkUtils::Normalize(lib1);
+		GdstkUtils::Normalize(lib1, Vec2{10, 10});
 		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib1);
 
 		Library lib = {};

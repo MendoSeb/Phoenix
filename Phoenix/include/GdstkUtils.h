@@ -37,7 +37,7 @@ namespace GdstkUtils
 	/* normalise les coordonnées des points entre - 1e6 et 1e6 (pour la précision)
 	* la normalisation permet de ne pas avoir à choisir un nombre pour scale les coordonnées, car les
 	* fichiers .gds ne sont pas forcément représentés pareil( primaire: entre -10 et 10, solder: entre -300000 et 30000) */
-	void Normalize(Library& lib, double limit = 1e5);
+	void Normalize(Library& lib, Vec2&& real_dim_cm);
 
 	/* Divise les polygones ayant plus de 8190 sommets (pour la triangulation et le warning) */
 	void MakeFracture(Library& lib);

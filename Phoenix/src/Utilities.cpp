@@ -100,7 +100,6 @@ namespace Utils
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
         std::ofstream file(filename);
 
         // écrire les sommets comme entiers, les doubles mettent du temps à être écrits (environ x2)
@@ -109,8 +108,8 @@ namespace Utils
                 for (std::vector<earcutPoint>& poly_sub : poly)
                     for (earcutPoint& point : poly_sub)
                     {
-                        file << "v "<< std::to_string(point[0])
-                             << " " << std::to_string(point[1])
+                        file << "v "<< std::to_string(point[0] / 5.4)
+                             << " " << std::to_string(point[1] / 5.4)
                              << " " << std::to_string(i) << "\n";
                     }
 

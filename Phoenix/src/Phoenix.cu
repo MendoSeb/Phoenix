@@ -2,7 +2,6 @@
 #include <optix_device.h> // AJOUTÉ : Nécessaire pour optixGetLaunchIndex, optixTrace, etc.
 #include <vector_types.h>
 #include "vec_math.h"
-#include "Optix.h"
 
 
 extern "C" {
@@ -10,20 +9,15 @@ extern "C" {
 }
 
 
-extern "C" __global__ void __raygen__rg() {
-    // Obtenir les dimensions de la grille et de la scène
-// Accéder aux données de la camédra
-
+extern "C" __global__ void __raygen__rg() 
+{
     // 1. Coordonnées de pixel
     const unsigned int x = optixGetLaunchIndex().x;
     const unsigned int y = optixGetLaunchIndex().y;
     const unsigned int launch_dim_x = optixGetLaunchDimensions().x;
     const unsigned int launch_dim_y = optixGetLaunchDimensions().y;
 
-    // 2. Coordonnées normalisées dans l'espace de l'image (-1 à 1)
-    float ratio = 2176.0f / 4096.0f;
-
-    float3 ray_origin = float3{ 
+    float3 ray_origin = float3{
         params.cam_eye.x + x,
         params.cam_eye.y + y, 
         params.cam_eye.z 
@@ -33,12 +27,6 @@ extern "C" __global__ void __raygen__rg() {
 
     float t_min = 0.0f;
     float t_max = 1e16f;
-
-    int x2 = ray_direction.x;
-    int y2 = ray_direction.y;
-
-    unsigned int visibility_mask = 1;
-    unsigned int Val = 0; 
     unsigned int p0;
         
     optixTrace(
@@ -53,14 +41,20 @@ extern "C" __global__ void __raygen__rg() {
         0,                  // ID du pipeline
         1,                  // ID du hitgroup
         0,                  // ID du programme de miss
-        p0           // Pointeur de données de payload
+        p0                  // Pointeur de données de payload
     );
-    Val |= p0;
 
-    int pixel_index = (int)ray_origin.y * params.image_width + (int)ray_origin.x;
+    for (int ix = 0; ix < params.sp; ix++)
+    {
+        for (int iy = 0; iy < params.sp; iy++)
+        {
+            int pixel_index = ((int)(ray_origin.y + params.min_y) * params.sp + iy + params.y_sp_index) * params.image_width
+                + ((int)(ray_origin.x + params.min_x) * params.sp + ix + params.x_sp_index);
 
-    if (pixel_index >= 0 && pixel_index < params.total_pixels)
-        params.image[pixel_index] = Val;
+            if (pixel_index >= 0 && pixel_index < params.total_pixels)
+                params.image[pixel_index] |= p0;
+        }
+    }
 }
 
 
