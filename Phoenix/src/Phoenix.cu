@@ -23,10 +23,6 @@ extern "C" __global__ void __raygen__rg()
         params.cam_eye.z
     };
 
-    float3 temp = ray_origin;
-    temp.x += 3000;
-    temp.y += 3000;
-
     float3 ray_direction = float3{ 0.0f, 0.0f, -1.0f };
 
     float t_min = 0.0f;
@@ -35,7 +31,7 @@ extern "C" __global__ void __raygen__rg()
         
     optixTrace(
         params.handle,      // Les paramètres de la caméra (pourrait être un espace vide)
-        temp,         // Point d'origine du rayon
+        ray_origin,         // Point d'origine du rayon
         ray_direction,      // Direction du rayon (avec distorsion)
         t_min,
         t_max,
@@ -48,20 +44,23 @@ extern "C" __global__ void __raygen__rg()
         p0                  // Pointeur de données de payload
     );
 
-    for (int ix = 0; ix < params.sp; ix++)
+    //int sp = params.sp;
+    unsigned int sp = 1;
+
+    for (int ix = 0; ix < sp; ix++)
     {
-        for (int iy = 0; iy < params.sp; iy++)
+        for (int iy = 0; iy < sp; iy++)
         {
             int pixel_index =
-                ((int)round((ray_origin.y + params.min_y) * params.sp) // calcul l'emplacement du pixel de taille: sp X sp (en y)
-                + iy) // ajoute le décalage pour parcourir les voisins (en y)
+                y * sp // calcul l'emplacement du pixel de taille: sp X sp (en y)
+                // ajoute le décalage pour parcourir les voisins (en y)
                 * params.image_width // pour enregistrer dans le tableau 1D
-                + ((int)round((ray_origin.x + params.min_x) * params.sp)  // calcul l'emplacement du pixel de taille: sp X sp (en x)
-                + ix); // ajoute le décalage pour parcourir les voisins (en x)
+                + x * sp;  // calcul l'emplacement du pixel de taille: sp X sp (en x)
+                 // ajoute le décalage pour parcourir les voisins (en x)
 
             // modifier le pixel que si on est dans l'image
             if (pixel_index >= 0 && pixel_index < params.total_pixels)
-                params.image[pixel_index] |= p0;
+                params.image[pixel_index] = p0;
         }
     }
 }

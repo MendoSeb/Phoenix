@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <optix_types.h>
+#include <cuda.h>
 
 
 #pragma pack(push, 1)
@@ -60,9 +61,10 @@ struct HitGroupData
     int* triangles_type; // full or hole
 };
 
+
 struct Params
 {
-    unsigned char* image;
+    unsigned char*         image;
     unsigned int           image_width;
     unsigned int           image_height;
     unsigned int           total_pixels;
@@ -228,6 +230,8 @@ public:
     /* Simule le déplacement d'un DMD pour faire la sous-pixelisation */
 	void DMDSimulation();
 
+    void DMDSimulationV2();
+
     /* Sauvegarde l'image en .bmp */
-    void saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* img);
+    void saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* img, CUstream& stream);
 };

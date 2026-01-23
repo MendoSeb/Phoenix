@@ -146,7 +146,8 @@ void OptixDemo()
 
 	//o.render();
 
-	o.DMDSimulation();
+	//o.DMDSimulation();
+	o.DMDSimulationV2();
 }
 
 
@@ -304,6 +305,8 @@ int main()
 	//WarpingDemo1();
 	//WarpingDemo2();
 	//WarpingDemo3();
+
+
 
 	return 0;
 }
