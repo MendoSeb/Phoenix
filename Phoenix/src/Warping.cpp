@@ -14,15 +14,13 @@ namespace Warping
 {
     void ThreadPolygonesInBox
     (
-        int index_min,
         int index_max,
         std::vector<std::vector<cv::Point2f>>& polys_in_box,
         Cell* cell, 
-        std::vector<cv::Point2f>& src_box,
-        std::mutex& mutex
+        std::vector<cv::Point2f>& src_box
     )
     {
-        for (size_t k = index_min; k < index_max; k++)
+        for (size_t k = 0; k < index_max; k++)
         {
             bool pointInBox = false;
 
@@ -54,9 +52,7 @@ namespace Warping
                     poly[m] = std::move(point);
                 }
 
-                mutex.lock();
                 polys_in_box.push_back(poly);
-                mutex.unlock();
             }
         }
     }
@@ -73,31 +69,13 @@ namespace Warping
         std::vector<std::vector<cv::Point2f>> polys_in_box;
         Cell* cell = lib.cell_array[0];
 
-        const unsigned int NB_THREAD = 1;
-        std::thread threads[NB_THREAD];
-        std::mutex mutex;
-        int nb_polys_per_thread = cell->polygon_array.count / NB_THREAD;
-
-        for (int i = 0; i < NB_THREAD; i++)
-        {
-            int index_min = i * nb_polys_per_thread;
-            int index_max = (i + 1) * nb_polys_per_thread;
-
-            if (i == NB_THREAD - 1)
-                index_max = cell->polygon_array.count;
-
-            threads[i] = std::thread(
-                ThreadPolygonesInBox,
-                index_min,
-                index_max,
-                std::ref(polys_in_box),
-                std::ref(cell),
-                std::ref(src_box),
-                std::ref(mutex));
-        }
-
-        for (int i = 0; i < NB_THREAD; i++)
-            threads[i].join();
+        ThreadPolygonesInBox
+        (
+            cell->polygon_array.count,
+            std::ref(polys_in_box),
+            std::ref(cell),
+            std::ref(src_box)
+        );
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         std::cout << "FindPolygonesInBox fait en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;

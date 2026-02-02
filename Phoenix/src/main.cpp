@@ -11,8 +11,7 @@
 #include "Utilities.h"
 #include "Optix.h"
 #include "Warping.h"
-
-#include <opencv2/opencv.hpp>
+#include "ODB++Parser.h"
 
 
 void BoostGeometryDemo()
@@ -39,8 +38,8 @@ void Clipper2Demo()
 
 	// duplicate
 	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12); // pour solder.gds
-	GdstkUtils::Normalize(lib, Vec2{30, 30});
+	GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 12, 12); // pour solder.gds
+	GdstkUtils::Normalize(lib, Vec2{120.0f, 90.0f});
 
 	Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
 
@@ -60,10 +59,10 @@ void Clipper2Demo()
 	GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str(), false); */
 
 	// triangulation avec clipper2
-	/* Clipper2Utils::MakeTriangulationPolyTree(u, clipper2_lib);
+	Clipper2Utils::MakeTriangulationPolyTree(u, clipper2_lib);
 	GdstkUtils::SaveToGdsii(clipper2_lib, (root_path + "union_mono_couche_triangulee.gds").c_str(), false);
 
-	std::vector<Library> clipper2_layers = { clipper2_lib };
+	/* std::vector<Library> clipper2_layers = {clipper2_lib};
 	Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche.obj").c_str());
 	clipper2_lib.clear();
 
@@ -183,11 +182,11 @@ void ThreadWarpingDemo
 void WarpingDemo1()
 {
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	int NB_ITERATION = 50;
+	int NB_ITERATION = 1;
 
 	for (int i = 0; i < NB_ITERATION; i++)
 	{
-		const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union_mono_couche_triangulée.gds";
+		const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union_mono_couche_triangulee.gds";
 		Library lib = GdstkUtils::LoadGDS(filename);
 		std::vector<std::vector<cv::Point2f>> polys_in_box;
 
@@ -225,8 +224,8 @@ void WarpingDemo1()
 void WarpingDemo2()
 {
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	int NB_ITERATION = 1;
-
+	int NB_ITERATION = 100;
+	
 	for (int i = 0; i < NB_ITERATION; i++)
 	{
 		const char* filename = "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds";
@@ -255,22 +254,23 @@ void WarpingDemo2()
 
 		// triangulation earcut après tranformation
 		Library lib2 = Warping::ConvertOpenCVPolygonesToGdstk(polys_in_box);
+		GdstkUtils::MakeFracture(lib2);
 
 		std::vector<Library> union_layer = { lib2 };
 		std::vector<earcutLayer> pair = Utils::EarcutTriangulation(union_layer);
 		//Utils::WriteLayersObj(pair, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/demo2.obj");
-		//GdstkUtils::SaveToGdsii(polys_in_boxs, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/warp_test.gds");
+		//GdstkUtils::SaveToGdsii(lib2, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/warp_test.gds", false);
 	}
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "WarpingDemo faite en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / NB_ITERATION << " ms" << std::endl;
+	std::cout << "WarpingDemo2 faite en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / NB_ITERATION << " ms" << std::endl;
 }
 
 
 void WarpingDemo3()
 {
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	int NB_ITERATION = 10;
+	int NB_ITERATION = 1;
 
 	for (int i = 0; i < NB_ITERATION; i++)
 	{
@@ -294,19 +294,103 @@ void WarpingDemo3()
 }
 
 
+void ODBDemo()
+{
+	Feature feature = ODB::ReadFeatureFile(
+		"C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/assemt/features");
+
+	Cell* cell = ODB::ConvertODBToPolygons(feature);
+	Library lib = {};
+	lib.init("library", 1e-6, 1e-9);
+	lib.cell_array.append(cell);
+	GdstkUtils::Normalize(lib, Vec2{10, 10});
+
+	GdstkUtils::SaveToGdsii(lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);
+}
+
+
+void Video()
+{
+	cv::VideoCapture cap("C:/Users/PC/Desktop/poc/153p_05_22.avi");
+
+	if (!cap.isOpened()) 
+		std::cout << "Error: Could not open video file." << std::endl;
+	else 
+		std::cout << "Video file opened successfully!" << std::endl;
+
+	// Read the first frame to confirm reading
+	const size_t FRAME_NUMBER = cap.get(cv::VideoCaptureProperties::CAP_PROP_FRAME_COUNT);
+	std::cout << FRAME_NUMBER << std::endl;
+
+	int start_index = 32;
+	size_t frame_gap = 36;
+	size_t cam_side = 512;
+	size_t nb_target_x = 17;
+	size_t nb_target_y = 9;
+	size_t nb_total_targets = 153;
+	size_t x = 0;
+	size_t y = 0;
+
+	// 2560 x 832
+	float img_width = std::ceil(2560.0f * (260.0f / 41.0f));
+	float img_height = std::ceil(832.0f * (260.0f / 41.0f));
+
+	float x_offset = (img_width - (17.0f * 512.0f)) / 17.0f;
+	float y_offset = (img_height - (9.0f * 512.0f)) / 9.0f;
+
+	cv::Mat res(
+		img_height,
+		img_width,
+		CV_8UC3, 
+		cv::Scalar(0, 0, 0)
+	);
+
+	for (int i = 0; i < start_index; i++)
+		cap.grab();
+
+	for (int i = 0; i < nb_total_targets; i++)
+	{
+		std::cout << "frame index: " << i << std::endl;
+
+		cv::Mat frame;
+		cap.read(frame);
+
+		cv::Rect roi(x, y, frame.cols, frame.rows);
+		frame.copyTo(res(roi));
+
+		int temp = frame_gap;
+
+		if (i % (nb_target_x * 3) == 0 && i != 0)
+			temp -= 30;
+
+		for (int k = 0; k < temp; k++)
+			cap.grab();
+
+		x = (size_t)(x + cam_side + x_offset) % (size_t)(nb_target_x * (cam_side + x_offset));
+
+		if (x == 0)
+			y += cam_side + y_offset;
+	}
+
+	cv::imwrite("C:/Users/PC/Desktop/poc/res.png", res);
+}
+
+
 int main()
 {
 	//BoostGeometryDemo();
 	//Clipper2Demo();
 	//GdstkDemo();
 
-	OptixDemo();
+	//OptixDemo();
 
 	//WarpingDemo1();
 	//WarpingDemo2();
 	//WarpingDemo3();
 
+	ODBDemo();
 
+	//Video();
 
 	return 0;
 }

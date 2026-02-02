@@ -45,105 +45,105 @@ static std::vector<std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>>
 {
     // 1ere transformation
     {
-        {cv::Point2f(-100000.0f, 50000.0f),
-        cv::Point2f(-100000.0f, 0.0f),
-        cv::Point2f(-50000.0f, 0.0f),
-        cv::Point2f(-50000.0f, 50000.0f) },
+        {cv::Point2f(-600000.0f, 300000.0f),
+        cv::Point2f(-600000.0f, 0.0f),
+        cv::Point2f(-300000.0f, 0.0f),
+        cv::Point2f(-300000.0f, 300000.0f) },
 
-        {cv::Point2f(-90000.0f, 90000.0f),
-        cv::Point2f(-110000.0f, 50000.0f),
-        cv::Point2f(-50000.0f, 0.0f),
-        cv::Point2f(-10000.0f, 60000.0f)} 
+        {cv::Point2f(-540000.0f, 540000.0f),
+        cv::Point2f(-660000.0f, 300000.0f),
+        cv::Point2f(-300000.0f, 0.0f),
+        cv::Point2f(-60000.0f, 360000.0f)}
     },
 
     // 2eme transformation
      {
-        {cv::Point2f(-50000.0f, 50000.0f),
-        cv::Point2f(-50000.0f, 0.0f),
+        {cv::Point2f(-300000.0f, 300000.0f),
+        cv::Point2f(-300000.0f, 0.0f),
         cv::Point2f(0.0f, 0.0f),
-        cv::Point2f(0.0f, 50000.0f) },
+        cv::Point2f(0.0f, 300000.0f) },
 
-        {cv::Point2f(10000.0f, 50000.0f),
-        cv::Point2f(20000.0f, 0.0f),
-        cv::Point2f(5000.0f, 0.0f),
-        cv::Point2f(0.0f, 50000.0f) }
+        {cv::Point2f(60000.0f, 300000.0f),
+        cv::Point2f(120000.0f, 0.0f),
+        cv::Point2f(30000.0f, 0.0f),
+        cv::Point2f(0.0f, 300000.0f) }
      },
 
-     // 3eme transformation
-     {
-        {cv::Point2f(0.0f, 50000.0f),
-        cv::Point2f(0.0f, 0.0f),
-        cv::Point2f(50000.0f, 0.0f),
-        cv::Point2f(50000.0f, 50000.0f) },
+    // 3eme transformation
+    {
+       {cv::Point2f(0.0f, 300000.0f),
+       cv::Point2f(0.0f, 0.0f),
+       cv::Point2f(300000.0f, 0.0f),
+       cv::Point2f(300000.0f, 300000.0f) },
 
-        {cv::Point2f(10000.0f, 0.0f),
-        cv::Point2f(20000.0f, -60000.0f),
-        cv::Point2f(5000.0f, -60000.0f),
-        cv::Point2f(0.0f, -10000.0f) }
-     },
+       {cv::Point2f(60000.0f, 0.0f),
+       cv::Point2f(120000.0f, -360000.0f),
+       cv::Point2f(30000.0f, -360000.0f),
+       cv::Point2f(0.0f, -60000.0f) }
+    },
 
-     // 4eme transformation
-     {
-        {cv::Point2f(50000.0f, 50000.0f),
-        cv::Point2f(50000.0f, 0.0f),
-        cv::Point2f(100000.0f, 0.0f),
-        cv::Point2f(100000.0f, 50000.0f) },
+    // 4eme transformation
+    {
+       {cv::Point2f(300000.0f, 300000.0f),
+       cv::Point2f(300000.0f, 0.0f),
+       cv::Point2f(600000.0f, 0.0f),
+       cv::Point2f(600000.0f, 300000.0f) },
 
-        {cv::Point2f(0.0f, -50000.0f),
-        cv::Point2f(-10000.0f, -110000.0f),
-        cv::Point2f(-25000.0f, -110000.0f),
-        cv::Point2f(-40000.0f, -60000.0f) }
-     },
+       {cv::Point2f(0.0f, -300000.0f),
+       cv::Point2f(-60000.0f, -660000.0f),
+       cv::Point2f(-150000.0f, -660000.0f),
+       cv::Point2f(-240000.0f, -360000.0f) }
+    },
 
     // 5eme transformation
     {
-        {cv::Point2f(-100000.0f, 0.0f),
-        cv::Point2f(-100000.0f, -50000.0f),
-        cv::Point2f(-50000.0f, -50000.0f),
-        cv::Point2f(-50000.0f, 0.0f) },
+        {cv::Point2f(-600000.0f, 0.0f),
+        cv::Point2f(-600000.0f, -300000.0f),
+        cv::Point2f(-300000.0f, -300000.0f),
+        cv::Point2f(-300000.0f, 0.0f) },
 
-        {cv::Point2f(-20000.0f, 90000.0f),
-        cv::Point2f(-40000.0f, 50000.0f),
-        cv::Point2f(20000.0f, 0.0f),
-        cv::Point2f(60000.0f, 60000.0f)}
+        {cv::Point2f(-120000.0f, 540000.0f),
+        cv::Point2f(-240000.0f, 300000.0f),
+        cv::Point2f(120000.0f, 0.0f),
+        cv::Point2f(360000.0f, 360000.0f)}
     },
 
     // 6eme transformation
      {
-        {cv::Point2f(-50000.0f, 0.0f),
-        cv::Point2f(-50000.0f, -50000.0f),
-        cv::Point2f(0.0f, -50000.0f),
+        {cv::Point2f(-300000.0f, 0.0f),
+        cv::Point2f(-300000.0f, -300000.0f),
+        cv::Point2f(0.0f, -300000.0f),
         cv::Point2f(0.0f, 0.0f) },
 
-        {cv::Point2f(80000.0f, 50000.0f),
-        cv::Point2f(100000.0f, 0.0f),
-        cv::Point2f(75000.0f, 0.0f),
-        cv::Point2f(70000.0f, 50000.0f) }
+        {cv::Point2f(480000.0f, 300000.0f),
+        cv::Point2f(600000.0f, 0.0f),
+        cv::Point2f(450000.0f, 0.0f),
+        cv::Point2f(420000.0f, 300000.0f) }
      },
 
     // 7eme transformation
     {
        {cv::Point2f(0.0f, 0.0f),
-       cv::Point2f(0.0f, -50000.0f),
-       cv::Point2f(50000.0f, -50000.0f),
-       cv::Point2f(50000.0f, 0.0f) },
+       cv::Point2f(0.0f, -300000.0f),
+       cv::Point2f(300000.0f, -300000.0f),
+       cv::Point2f(300000.0f, 0.0f) },
 
-       {cv::Point2f(80000.0f, 0.0f),
-       cv::Point2f(100000.0f, -60000.0f),
-       cv::Point2f(75000.0f, -60000.0f),
-       cv::Point2f(70000.0f, -10000.0f) }
+       {cv::Point2f(480000.0f, 0.0f),
+       cv::Point2f(600000.0f, -360000.0f),
+       cv::Point2f(450000.0f, -360000.0f),
+       cv::Point2f(420000.0f, -60000.0f) }
     },
 
     // 8eme transformation
     {
-       {cv::Point2f(50000.0f, 0.0f),
-       cv::Point2f(50000.0f, -50000.0f),
-       cv::Point2f(100000.0f, -50000.0f),
-       cv::Point2f(100000.0f, 0.0f) },
+       {cv::Point2f(300000.0f, 0.0f),
+       cv::Point2f(300000.0f, -300000.0f),
+       cv::Point2f(600000.0f, -300000.0f),
+       cv::Point2f(600000.0f, 0.0f) },
 
-       {cv::Point2f(70000.0f, -50000.0f),
-       cv::Point2f(60000.0f, -110000.0f),
-       cv::Point2f(45000.0f, -110000.0f),
-       cv::Point2f(30000.0f, -60000.0f) }
+       {cv::Point2f(420000.0f, -300000.0f),
+       cv::Point2f(360000.0f, -660000.0f),
+       cv::Point2f(270000.0f, -660000.0f),
+       cv::Point2f(180000.0f, -360000.0f) }
     }
 };
