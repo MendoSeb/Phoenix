@@ -99,7 +99,7 @@ namespace Clipper2Utils
 				double min_dist = INT32_MAX;
 				size_t parent_index = -1;
 				size_t child_index = -1;
-				int step = 100; // 100
+				int step = 10; // 100
 
 				// trouver les index du parent et enfant des sommets les plus proches
 				for (size_t a = 0; a < nb_points_parent; a += step)
@@ -283,7 +283,7 @@ namespace Clipper2Utils
 	}
 
 
-	void MakeUnionPolyTree(const Paths64& polys, PolyTree64& output)
+	void MakeUnion(const Paths64& polys, PolyTree64& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -475,6 +475,9 @@ namespace Clipper2Utils
 
 		output = ConvertPaths64ToGdsii(final);
 	}
+
+
+	void essaiClientComparison();
 }
 
 

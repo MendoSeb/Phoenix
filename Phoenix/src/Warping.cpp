@@ -103,4 +103,27 @@ namespace Warping
             }
         }
     }
+
+
+    Library ConvertOpenCVPolygonesToGdstk(std::vector<std::vector<cv::Point2f>>& polys_in_boxs)
+    {
+        Library lib = {};
+        lib.init("library", 1e-6, 1e-9);
+
+        Cell* cell = new Cell();
+        cell->name = copy_string("FIRST", NULL);
+        lib.cell_array.append(cell);
+
+        for (std::vector<cv::Point2f>& poly : polys_in_boxs)
+        {
+            Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
+
+            for (cv::Point2f& point : poly)
+                gdstk_poly->point_array.append(Vec2{ point.x, point.y });
+
+            cell->polygon_array.append(gdstk_poly);
+        }
+
+        return lib;
+    }
 }

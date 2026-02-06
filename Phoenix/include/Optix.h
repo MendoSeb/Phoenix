@@ -230,6 +230,8 @@ public:
     /* Simule le déplacement d'un DMD pour faire la sous-pixelisation */
 	void DMDSimulation();
 
+    // Deplacement du dmd (de la caméra) et renvoie à chaque lancer de rayon le résultat
+    // avec du double buffering
     void DMDSimulationV2();
 
     /* Sauvegarde l'image en .bmp */

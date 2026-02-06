@@ -14,12 +14,15 @@ using namespace Clipper2Lib;
 
 namespace Clipper2Utils
 {
-	///* Fonction de sauvegarde *///
-	// convertit les polygones chargés avec gdstk en une suite de polygones Paths64 de clipper2
+	/// FONCTIONS DE CONVERSION ///
+	
+	// gdstk::Library ---> Clipper2Lib::Paths64
 	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib);
 
+	// gdstk::Library ---> Clipper2Lib::PolyTree64
 	std::unique_ptr<PolyTree64> ConvertGdstkPolygonsToPolyTree64(Library& lib);
 
+	// Clipper2Lib::Paths64 ---> Clipper2Lib::PolyTree64
 	std::unique_ptr<PolyTree64> ConvertPaths64ToPolyTree64(const Paths64& paths);
 
 	// Fonction récursive pour récupérer les polygones d'un polytree en polygones gdstk (avec trous)
@@ -32,26 +35,30 @@ namespace Clipper2Utils
 	// (hauteur de l'arbre 0 = polygones pleins, 1 = trous, 2 = pleins etc...)
 	void GetTreeLayersRecursive(PolyTree64& node, int depth, std::vector<Paths64>& layers);
 
-	// Convertit des polygones Paths64 en polygones gdstk (Library)
+	// Clipper2Lib::Paths64 ---> gdstk::Library
 	Library ConvertPaths64ToGdsii(const Paths64& polys);
 
-	// Convertit un polytree64 en une polygones gdstk (avec trous)
+	// Clipper2Lib::PolyTree64 ---> gdstk::Library
 	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output);
 
+	// Clipper2Lib::std::unique_ptr<PolyTree64> ---> gdstk::Library
 	void ConvertPolyTree64ToGdsiiPath2(std::unique_ptr<PolyTree64>& tree, Library& output);
 
-	// convertit un polytree64 en polygones gdstk triés par couches
+	// Clipper2Lib::PolyTree64 ---> std::vector<gdstk::Library> (couches selon la polarité)
 	std::vector<Library> ConvertPolyTree64ToGdsiiLayers(PolyTree64& tree);
 
+
+	/// OPERATIONS SUR LES POLYGONES ///
 	/* Triangule les polygones chargés avec gdstk sans faire d'union (pour garder des triangulations simples) */
 	void TriangulateWithoutUnion();
 
-	///* opérations de base *///
-	// Fait l'union des polygones polys
-	void MakeUnionPolyTree(const Paths64& polys, PolyTree64& output);
+	// Union d'un Clipper2::Paths64 et retourne un Clipper2::PolyTree64
+	void MakeUnion(const Paths64& polys, PolyTree64& output);
 
+	// Union entre les polygones d'un même Clipper2::PolyTree64
 	std::unique_ptr<PolyTree64> MakeUnion(const std::unique_ptr<PolyTree64>& polys);
 
+	// Union entre les polygones de deux Clipper2::PolyTree64
 	std::unique_ptr<PolyTree64> MakeUnion(
 		const std::unique_ptr<PolyTree64>& i1, const std::unique_ptr<PolyTree64>& i2);
 
@@ -62,12 +69,14 @@ namespace Clipper2Utils
 	std::unique_ptr<PolyTree64> MakeDifference(
 		const std::unique_ptr<PolyTree64>& tree, const std::unique_ptr<PolyTree64>& polys2);
 
-	// Fait l'inverse des polygones actuels
+	// Inverse les trous et zones pleins d'un Clipper2::PolyTree64
 	void MakeInverse(const PolyTree64& tree, PolyTree64& output);
 
+	// Intersection entre deux Clipper2::PolyTree64
 	std::unique_ptr<PolyTree64> MakeIntersection(
 		const std::unique_ptr<PolyTree64>& input1, const std::unique_ptr<PolyTree64>& input2);
 
+	// Transforme les positions y des points en -y (inversion par rapport à 0)
 	std::unique_ptr<PolyTree64> MakeMirrorY(const std::unique_ptr<PolyTree64>& input);
 
 	// Triangule les polygones d'un polytree64

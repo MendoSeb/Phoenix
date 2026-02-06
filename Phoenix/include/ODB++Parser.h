@@ -99,27 +99,27 @@ namespace ODB
 {
 	const float UNIT_CONVERSION = 1000.0;
 
-	Feature ReadFeatureFile(const char* file_name);
+	Feature readFeatureFile(const char* file_name);
 
 	/// focntions pour convertir les objets en polygones
-	Cell* ConvertODBToPolygons(Feature& feature);
+	Cell* convertODBToPolygons(Feature& feature);
 
-	gdstk::Polygon* RoundToPolygon(const Round* r);
-	gdstk::Polygon* RectangleToPolygon(const Rectangle* rect);
-	gdstk::Polygon* ArcToPolygon(const Arc* a);
-	std::vector<gdstk::Polygon*> SurfaceToPolygon(const Surface* s);
-	gdstk::Polygon* PadToPolygon(const Pad* p, Polygon poly);
-	gdstk::Polygon* LineToPolygon(const Line& l);
+	gdstk::Polygon* roundToPolygon(const Round* r);
+	gdstk::Polygon* rectangleToPolygon(const Rectangle* rect);
+	gdstk::Polygon* arcToPolygon(const Arc* a);
+	std::vector<gdstk::Polygon*> surfaceToPolygon(const Surface* s);
+	gdstk::Polygon* padToPolygon(const Pad* p, Polygon poly);
+	gdstk::Polygon* lineToPolygon(const Line& l);
 
 
 	/// fonction pour convertir en polygone un symbole tracé le long d'un segment ou d'un arc
 	// calcule la norme d'un vecteur
-	float Norme(const Vec2& v);
-	float SinusOfVectors(const Vec2& v1, const Vec2& v2);
-	float DotProduct(const Vec2& v1, const Vec2& v2);
+	float norme(const Vec2& v);
+	float sinusOfVectors(const Vec2& v1, const Vec2& v2);
+	float dotProduct(const Vec2& v1, const Vec2& v2);
 
 	// trouve les indices des sommets les plus éloignés à gauche et à droite de segment
-	std::pair<size_t, size_t> FindFarthestVertices(const Vec2& segment, const Polygon* poly);
+	std::pair<size_t, size_t> findFarthestVertices(const Vec2& segment, const Polygon* poly);
 
 	// trace un symbole le long d'une ligne
 }

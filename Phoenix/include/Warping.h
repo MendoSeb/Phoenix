@@ -1,43 +1,25 @@
 #include <opencv2/opencv.hpp>
 #include <gdstk/library.hpp>
+#include "vector_types.h"
 
 
 namespace Warping
 {
-    /* Renvoie tous les polygones dont au moins un point est dans la "boite" */
+    // Renvoie tous les polygones dont au moins un point est dans la "boite"
     std::vector<std::vector<cv::Point2f>> FindPolygonesInBox(
         const Library& lib,
         std::vector<cv::Point2f>& box_pos
     );
 
+    // Applique la matrice de transformation "warp" aux points contenu dans le polygone "src_box"
     void TransformVerticesInBox(
         std::pair<std::vector<cv::Point2f>, std::vector<uint3>>& obj,
         std::vector<cv::Point2f>& src_box,
         cv::Mat& warp
     );
 
-    /* Convertit les polygones avec points OpenCV en polygones de type gdstk */
-    Library ConvertOpenCVPolygonesToGdstk(std::vector<std::vector<cv::Point2f>>& polys_in_boxs)
-    {
-        Library lib = {};
-        lib.init("library", 1e-6, 1e-9);
-
-        Cell* cell = new Cell();
-        cell->name = copy_string("FIRST", NULL);
-        lib.cell_array.append(cell);
-
-        for (std::vector<cv::Point2f>& poly : polys_in_boxs)
-        {
-            Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
-
-            for (cv::Point2f& point : poly)
-                gdstk_poly->point_array.append(Vec2{ point.x, point.y });
-
-            cell->polygon_array.append(gdstk_poly);
-        }
-
-        return lib;
-   }
+    // Convertit les polygones avec points OpenCV en polygones de type gdstk
+    Library ConvertOpenCVPolygonesToGdstk(std::vector<std::vector<cv::Point2f>>& polys_in_boxs);
 }
 
 

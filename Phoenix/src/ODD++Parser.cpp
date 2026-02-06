@@ -7,7 +7,7 @@
 
 namespace ODB
 {
-	Feature ReadFeatureFile(const char* file_name)
+	Feature readFeatureFile(const char* file_name)
 	{
 		std::ifstream file(file_name);
 
@@ -168,7 +168,7 @@ namespace ODB
 	}
 
 
-	Cell* ConvertODBToPolygons(Feature& feature)
+	Cell* convertODBToPolygons(Feature& feature)
 	{
 		Cell* symbols_polys = new Cell();
 		Cell* feature_polys = new Cell();
@@ -178,10 +178,10 @@ namespace ODB
 		for (Geometry* geo : feature.feature_symbol_names)
 		{
 			if (Round* r = dynamic_cast<Round*>(geo); r != nullptr)
-				symbols_polys->polygon_array.append(RoundToPolygon(r));
+				symbols_polys->polygon_array.append(roundToPolygon(r));
 
 			if (Rectangle* rect = dynamic_cast<Rectangle*>(geo); rect != nullptr)
-				symbols_polys->polygon_array.append(RectangleToPolygon(rect));
+				symbols_polys->polygon_array.append(rectangleToPolygon(rect));
 		}
 
 		// convertit en polygone line, arc etc... à l'aide des polygones du dessus
@@ -190,7 +190,7 @@ namespace ODB
 			/* if (Line* l = dynamic_cast<Line*>(geo); l != nullptr)
 			{
 				assert(l->sym_num != -1 && l->sym_num < symbols_polys->polygon_array.count);
-				Polygon* poly = LineToPolygon(*l);
+				Polygon* poly = lineToPolygon(*l);
 
 				if (poly)
 					feature_polys->polygon_array.append(poly);
@@ -199,7 +199,7 @@ namespace ODB
 			else if (Arc* a = dynamic_cast<Arc*>(geo); a != nullptr)
 			{
 				assert(a->sym_num != -1 && a->sym_num < symbols_polys->polygon_array.count);
-				Polygon* poly = ArcToPolygon(a);
+				Polygon* poly = arcToPolygon(a);
 				
 				if (poly)
 					feature_polys->polygon_array.append(poly);
@@ -208,13 +208,13 @@ namespace ODB
 			else if (Pad* p = dynamic_cast<Pad*>(geo); p != nullptr)
 			{
 				assert(p->apt_def != -1 && p->apt_def < symbols_polys->polygon_array.count);
-				Polygon* poly = PadToPolygon(p, *symbols_polys->polygon_array[p->apt_def]);
+				Polygon* poly = padToPolygon(p, *symbols_polys->polygon_array[p->apt_def]);
 				feature_polys->polygon_array.append(poly);
 			} */
 
 			if (Surface* s = dynamic_cast<Surface*>(geo); s != nullptr)
 			{
-				std::vector<Polygon*> polys = SurfaceToPolygon(s);
+				std::vector<Polygon*> polys = surfaceToPolygon(s);
 
 				for (Polygon* poly : polys)
 					feature_polys->polygon_array.append(poly);
@@ -225,7 +225,7 @@ namespace ODB
 	}
 
 
-	gdstk::Polygon* RoundToPolygon(const Round* r)
+	gdstk::Polygon* roundToPolygon(const Round* r)
 	{
 		size_t nb_points = 30;
 		float step_angle = 2.0f * PI / nb_points;
@@ -242,7 +242,7 @@ namespace ODB
 	}
 
 
-	gdstk::Polygon* RectangleToPolygon(const Rectangle* rect)
+	gdstk::Polygon* rectangleToPolygon(const Rectangle* rect)
 	{
 		Polygon* poly = new Polygon();
 
@@ -284,7 +284,7 @@ namespace ODB
 	}
 
 
-	gdstk::Polygon* ArcToPolygon(const Arc* a)
+	gdstk::Polygon* arcToPolygon(const Arc* a)
 	{
 		if (a->is_poly_circle)
 		{
@@ -297,14 +297,14 @@ namespace ODB
 			fp->init(start, 2, a->circle_radius, 0, 0.00000001, 0);
 			fp->elements->end_type = gdstk::EndType::Round;
 
-			float total_angle = std::acos(DotProduct(start - center, end - center));
+			float total_angle = std::acos(dotProduct(start - center, end - center));
 			
 			if (total_angle == 0)
 				total_angle = PI * 2.0001;
 
 			size_t nb_points = 200;
 			float step_angle = total_angle / nb_points;
-			float radius = Norme(start - center);
+			float radius = norme(start - center);
 			const double width = a->circle_radius;
 
 			for (size_t i = 1; i <= nb_points; i++)
@@ -336,7 +336,7 @@ namespace ODB
 	}
 
 
-	std::vector<gdstk::Polygon*> SurfaceToPolygon(const Surface* s)
+	std::vector<gdstk::Polygon*> surfaceToPolygon(const Surface* s)
 	{
 		std::vector<Polygon*> polys;
 
@@ -362,9 +362,9 @@ namespace ODB
 
 					size_t nb_points = 10;
 					Vec2 sc = previous_point - arc_center;
-					float dist = Norme(arc_end - arc_center);
+					float dist = norme(arc_end - arc_center);
 					float step_angle = std::acos(
-						DotProduct(arc_end - arc_center, previous_point - arc_center)) / nb_points;
+						dotProduct(arc_end - arc_center, previous_point - arc_center)) / nb_points;
 
 					for (size_t i = 1; i <= nb_points; i++)
 					{
@@ -401,7 +401,7 @@ namespace ODB
 	}
 
 
-	gdstk::Polygon* PadToPolygon(const Pad* p, Polygon poly)
+	gdstk::Polygon* padToPolygon(const Pad* p, Polygon poly)
 	{
 		Polygon* t_poly = new Polygon();
 		Vec2 pad_pos{ p->x, p->y };
@@ -432,7 +432,7 @@ namespace ODB
 	}
 
 
-gdstk::Polygon* LineToPolygon(const Line& l)
+gdstk::Polygon* lineToPolygon(const Line& l)
 {
 	if (l.is_poly_circle)
 	{
@@ -470,25 +470,25 @@ gdstk::Polygon* LineToPolygon(const Line& l)
 }
 
 
-	float Norme(const Vec2& v)
+	float norme(const Vec2& v)
 	{
 		return std::sqrt(v.x * v.x + v.y * v.y);
 	}
 
 
-	float SinusOfVectors(const Vec2& v1, const Vec2& v2)
+	float sinusOfVectors(const Vec2& v1, const Vec2& v2)
 	{
-		return (v1.x * v2.y - v1.y * v2.x) / (Norme(v1) * Norme(v2));
+		return (v1.x * v2.y - v1.y * v2.x) / (norme(v1) * norme(v2));
 	}
 
 
-	float DotProduct(const Vec2& v1, const Vec2& v2)
+	float dotProduct(const Vec2& v1, const Vec2& v2)
 	{
-		return (v1.x * v2.x + v1.y * v2.y) / (Norme(v1) * Norme(v2));
+		return (v1.x * v2.x + v1.y * v2.y) / (norme(v1) * norme(v2));
 	}
 
 
-	std::pair<size_t, size_t> FindFarthestVertices(const Vec2& segment, const Polygon* poly)
+	std::pair<size_t, size_t> findFarthestVertices(const Vec2& segment, const Polygon* poly)
 	{
 		// find the two farthest points of poly to the line's segment
 		std::pair<size_t, size_t> farthest_points = { -1, -1 };
@@ -496,7 +496,7 @@ gdstk::Polygon* LineToPolygon(const Line& l)
 
 		for (size_t i = 0; i < poly->point_array.count; i++)
 		{
-			float dist = SinusOfVectors(
+			float dist = sinusOfVectors(
 				segment,
 				Vec2{
 					poly->point_array[i].x,
@@ -523,13 +523,13 @@ gdstk::Polygon* LineToPolygon(const Line& l)
 	}
 
 
-	gdstk::Polygon* LineToPolygon(const Line& l, const gdstk::Polygon* poly)
+	gdstk::Polygon* lineToPolygon(const Line& l, const gdstk::Polygon* poly)
 	{
 		Vec2 segment{ l.xe - l.xs, l.ye - l.ys };
 		Vec2 line_points[2] = { {l.xs, l.ys}, {l.xe, l.ye} };
 
 		// récupérer les indices des sommets les plus à gauche et à droite de la ligne
-		std::pair<size_t, size_t> farthest_points = FindFarthestVertices(segment, poly);
+		std::pair<size_t, size_t> farthest_points = findFarthestVertices(segment, poly);
 
 		// créer le polygone à partir des points max à gauche et à droite
 		gdstk::Polygon* line_poly = new Polygon();
