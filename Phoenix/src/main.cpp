@@ -296,8 +296,9 @@ void WarpingDemo3()
 
 void ODBDemo()
 {
-	Feature feature = ODB::ReadFeatureFile(
-		"C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/assemt/features");
+	//Feature feature = ODB::ReadFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/assemt/features");
+	Feature feature = ODB::ReadFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_8/features");
+	//Feature feature = ODB::ReadFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_7/features");
 
 	Cell* cell = ODB::ConvertODBToPolygons(feature);
 	Library lib = {};
@@ -305,7 +306,55 @@ void ODBDemo()
 	lib.cell_array.append(cell);
 	GdstkUtils::Normalize(lib, Vec2{10, 10});
 
-	GdstkUtils::SaveToGdsii(lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);
+	Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
+
+	PolyTree64 u;
+	Library u_lib = {};
+	Clipper2Utils::MakeUnionPolyTree(paths, u);
+	Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib);
+
+	GdstkUtils::SaveToGdsii(u_lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);
+}
+
+
+std::vector<double> FindMinMax(cv::Mat& frame, bool text_down)
+{
+	std::vector<double> limits = {1e10, -1e10, 0};
+
+	if (text_down) 
+		limits[2] = 1e10; 
+	else 
+		limits[2] = -1e10;
+
+	for (size_t y = 0; y < frame.rows; y++)
+	{
+		for (size_t x = 0; x < frame.cols; x++)
+		{
+			cv::Vec3b pixel = frame.at<cv::Vec3b>(y, x);
+
+			if (pixel[0] > 0)
+			{
+				if (x < limits[0])
+					limits[0] = x;
+
+				if (x > limits[1])
+					limits[1] = x;
+
+				if (text_down)
+				{
+					if (y < limits[2])
+						limits[2] = y;
+				}
+				else
+				{
+					if (y > limits[2])
+						limits[2] = y;
+				}
+			}
+		}
+	}
+
+	return limits;
 }
 
 
@@ -355,8 +404,30 @@ void Video()
 		cv::Mat frame;
 		cap.read(frame);
 
-		cv::Rect roi(x, y, frame.cols, frame.rows);
-		frame.copyTo(res(roi));
+		int offset = 110;
+		cv::Mat cropped = frame(
+			cv::Rect(offset, offset, 512 - 2 * offset, 512 - 2 * offset)
+		);
+		
+		std::vector<double> limits = FindMinMax(cropped, i < 68);
+		
+		int x1 = limits[0];
+		int y1 = limits[2];
+		int w1 = limits[1] - limits[0];
+		int h1 = w1;
+
+		if (i >= 68)
+			y1 = limits[2] - h1;
+
+		cv::Mat cropped2 = cropped(cv::Rect(x1, y1, w1, h1));
+
+		cv::imwrite(
+			("C:/Users/PC/Desktop/poc/targets/" + std::to_string(i) + ".png").c_str(), 
+			frame
+		);
+
+		//cv::Rect roi(x, y, frame.cols, frame.rows);
+		//frame.copyTo(res(roi));
 
 		int temp = frame_gap;
 
@@ -376,6 +447,64 @@ void Video()
 }
 
 
+void Onehourdestroyer()
+{
+	// score final
+	// opérations en 87 s
+	// total (opérations + sauvegarde en .gds) en 140 s
+
+	std::string file1 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/0 - Image Primaire PHC Mire Externe.gds";
+	std::string file2 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/58a0_Solder CENTRE TROUS BOTTOM.gds";
+	std::string file3 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/004672-647720058a0.bot_CENTRE_Nettoyé.gds";
+
+	Library i1_lib = GdstkUtils::LoadGDS(file1.c_str());
+	Library i2_lib = GdstkUtils::LoadGDS(file2.c_str());
+	Library i3_lib = GdstkUtils::LoadGDS(file3.c_str());
+
+	// pour pourvoir appliquer le sbons dégraissement
+	GdstkUtils::Scale(i1_lib, 100);
+	GdstkUtils::Scale(i2_lib, 100);
+	GdstkUtils::Scale(i3_lib, 100);
+
+	std::unique_ptr<PolyTree64> i1 = Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(i1_lib);
+	std::unique_ptr<PolyTree64> i2 = Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(i2_lib);
+	std::unique_ptr<PolyTree64> i3 = Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(i3_lib);
+	
+	// MirrorY(union(i1, Diff(Size(i2, -0.03), Size(i2, -0.07))))
+	// MirrorY(union(i1,Size(diff(i2,interSize(i2,i3,-0.04)),-0.07)))
+	// MirrorY(union(i1,Size(diff(i2,interSize(i2,i3,-0.06)),-0.03)))
+	// MirrorY(union(i1,Size(i2,-0.03)))
+	// MirrorY(union(i1,Size(inter(i2,interSize(i2,i3,0.06)),-0.03)))
+
+	using namespace Clipper2Utils;
+
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+	std::vector<std::unique_ptr<PolyTree64>> operations;
+	operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDifference(MakeDegraissement(i2, -3), MakeDegraissement(i3, -7)))));
+	operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDegraissement(MakeDifference(i2, MakeDegraissement(MakeIntersection(i2, i3), -4)), -7))));
+	operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDegraissement(MakeDifference(i2, MakeDegraissement(MakeIntersection(i2, i3), 6)), -3))));
+	operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDegraissement(i2, -3))));
+	operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDegraissement(MakeIntersection(i2, MakeDegraissement(MakeIntersection(i2, i3), 6)), -3))));
+
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "Opérations faites en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+
+	int i = 0;
+	for (auto& op : operations)
+	{
+		Library lib = {};
+		Clipper2Utils::ConvertPolyTree64ToGdsiiPath2(op, lib);
+		GdstkUtils::Scale(lib, 0.01);
+		GdstkUtils::SaveToGdsii(lib, ("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/test" + std::to_string(i) + ".gds").c_str(), false);
+		i++;
+	}
+
+	end = std::chrono::steady_clock::now();
+	std::cout << "total en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+}
+
+
 int main()
 {
 	//BoostGeometryDemo();
@@ -388,9 +517,11 @@ int main()
 	//WarpingDemo2();
 	//WarpingDemo3();
 
-	ODBDemo();
+	//ODBDemo();
 
 	//Video();
+
+	Onehourdestroyer();
 
 	return 0;
 }

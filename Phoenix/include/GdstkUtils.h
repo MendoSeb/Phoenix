@@ -50,4 +50,6 @@ namespace GdstkUtils
 
 	/* Applique la différence entre deux listes de polygones de type gdstk: (lib1 - lib2) */
 	Library MakeDifference(Library& lib1, Library& lib2);
+
+	void Scale(Library& lib, double scale);
 };

@@ -31,6 +31,18 @@ namespace Clipper2Utils
 	}
 
 
+	std::unique_ptr<PolyTree64> ConvertGdstkPolygonsToPolyTree64(Library& lib)
+	{
+		auto output = std::make_unique<PolyTree64>();
+		Paths64 paths = ConvertGdstkPolygonsToPaths64(lib);
+
+		for (size_t i = 0; i < paths.size(); i++)
+			output->AddChild(paths[i]);
+
+		return output;
+	}
+
+
 	Library ConvertPaths64ToGdsii(const Paths64& polys)
 	{
 		gdstk::Library lib = {};
@@ -51,6 +63,17 @@ namespace Clipper2Utils
 		}
 
 		return lib;
+	}
+
+
+	std::unique_ptr<PolyTree64> ConvertPaths64ToPolyTree64(const Paths64& paths)
+	{
+		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+
+		for (size_t i = 0; i < paths.size(); i++)
+			output->AddChild(paths[i]);
+
+		return output;
 	}
 
 
@@ -76,7 +99,7 @@ namespace Clipper2Utils
 				double min_dist = INT32_MAX;
 				size_t parent_index = -1;
 				size_t child_index = -1;
-				int step = 100;
+				int step = 100; // 100
 
 				// trouver les index du parent et enfant des sommets les plus proches
 				for (size_t a = 0; a < nb_points_parent; a += step)
@@ -134,6 +157,31 @@ namespace Clipper2Utils
 
 		std::vector<gdstk::Polygon*> polys;
 		GetTreeLayerGdstkRecursive(tree, polys);
+
+		Array<gdstk::Polygon*> gdstk_polys = {};
+
+		for (Polygon* p : polys)
+			gdstk_polys.append(p);
+
+		cell->polygon_array = gdstk_polys;
+
+		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+		std::cout << "conversion polytree64 vers gdstk " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+	}
+
+
+	void ConvertPolyTree64ToGdsiiPath2(std::unique_ptr<PolyTree64>& tree, Library& output)
+	{
+		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+		output.init("library", 1e-6, 1e-9);
+
+		gdstk::Cell* cell = new Cell();
+		cell->name = copy_string("FIRST", NULL);
+		output.cell_array.append(cell);
+
+		std::vector<gdstk::Polygon*> polys;
+		GetTreeLayerGdstkRecursive(*tree, polys);
 
 		Array<gdstk::Polygon*> gdstk_polys = {};
 
@@ -248,35 +296,71 @@ namespace Clipper2Utils
 	}
 
 
-	void MakeDegraissement(const PolyTree64& tree, double deg, PolyTree64& output)
+	std::unique_ptr<PolyTree64> MakeUnion(const std::unique_ptr<PolyTree64>& polys)
 	{
-		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		Paths64 input = PolyTreeToPaths64(tree);
+		auto output = std::make_unique<PolyTree64>();
 
-		// dégraissement
-		ClipperOffset offsetter;
-		offsetter.AddPaths(input, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
-		offsetter.Execute(deg, output);
+		Clipper64 cd;
+		cd.AddSubject(PolyTreeToPaths64(*polys));
+		cd.Execute(ClipType::Union, FillRule::NonZero, *output);
 
-		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "Degraissement fait en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+		return output;
 	}
 
 
-	void MakeDifference(const PolyTree64& polys1, const PolyTree64& polys2, PolyTree64& output)
+	std::unique_ptr<PolyTree64> MakeUnion(
+		const std::unique_ptr<PolyTree64>& i1, const std::unique_ptr<PolyTree64>& i2)
+	{
+		auto output = std::make_unique<PolyTree64>();
+
+		Clipper64 cd;
+		cd.AddSubject(PolyTreeToPaths64(*i1));
+		cd.AddSubject(PolyTreeToPaths64(*i2));
+		cd.Execute(ClipType::Union, FillRule::NonZero, *output);
+
+		return output;
+	}
+
+
+	std::unique_ptr<PolyTree64> MakeDegraissement(const std::unique_ptr<PolyTree64>& input, double deg)
+	{
+		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+		Paths64 paths = PolyTreeToPaths64(*input);
+
+		// dégraissement
+		ClipperOffset offsetter;
+		offsetter.AddPaths(paths, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+		offsetter.Execute(deg, *output);
+
+		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+		std::cout << "Degraissement fait en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+
+		return output;
+	}
+
+
+	std::unique_ptr<PolyTree64> MakeDifference
+	(
+		const std::unique_ptr<PolyTree64>& polys1, 
+		const std::unique_ptr<PolyTree64>& polys2
+	)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-		Paths64 input1 = PolyTreeToPaths64(polys1);
-		Paths64 input2 = PolyTreeToPaths64(polys2);
+		Paths64 input1 = PolyTreeToPaths64(*polys1);
+		Paths64 input2 = PolyTreeToPaths64(*polys2);
+		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
 
 		Clipper64 cd;
 		cd.AddSubject(input1);
 		cd.AddClip(input2);
-		cd.Execute(ClipType::Difference, FillRule::NonZero, output);
+		cd.Execute(ClipType::Difference, FillRule::NonZero, *output);
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Difference faite en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+	
+		return output;
 	}
 
 
@@ -318,6 +402,44 @@ namespace Clipper2Utils
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Inverse fait en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+	}
+
+
+	std::unique_ptr<PolyTree64> MakeIntersection
+	(
+		const std::unique_ptr<PolyTree64>& input1,
+		const std::unique_ptr<PolyTree64>& input2
+	)
+	{
+		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+		Paths64 paths1 = PolyTreeToPaths64(*input1);
+		Paths64 paths2 = PolyTreeToPaths64(*input2);
+
+		Clipper64 cd;
+		cd.AddSubject(paths1);
+		cd.AddClip(paths2);
+		cd.Execute(ClipType::Intersection, FillRule::NonZero, *output);
+
+		return output;
+	}
+
+
+	std::unique_ptr<PolyTree64> MakeMirrorY(const std::unique_ptr<PolyTree64>& input)
+	{
+		Paths64 paths = PolyTreeToPaths64(*input);
+
+		for (Path64& path : paths)
+			for (Point64& point : path)
+				point.y = -point.y;
+
+
+		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+
+		Clipper64 cd;
+		cd.AddSubject(paths);
+		cd.Execute(ClipType::Union, FillRule::NonZero, *output);
+
+		return output;
 	}
 
 

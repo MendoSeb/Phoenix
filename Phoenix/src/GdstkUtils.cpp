@@ -377,4 +377,11 @@ namespace GdstkUtils
 		std::cout << "Difference faite en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
 		return out_lib;
 	}
+
+	void Scale(Library& lib, double scale)
+	{
+		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+				lib.cell_array[0]->polygon_array[i]->point_array[k] *= scale;
+	}
 }

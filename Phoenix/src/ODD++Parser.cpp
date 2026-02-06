@@ -10,6 +10,13 @@ namespace ODB
 	Feature ReadFeatureFile(const char* file_name)
 	{
 		std::ifstream file(file_name);
+
+		if (!file)
+		{
+			std::cout << "erreur d'ouverture" << std::endl;
+			assert(0);
+		}
+
 		std::string line;
 		Feature feature;
 
@@ -47,7 +54,6 @@ namespace ODB
 					Round* r = new Round();
 					int res = sscanf_s(line.c_str(), "$%d r%f", &id, &r->r);
 					r->r /= 2.0f * UNIT_CONVERSION;
-					//r->r = 0.031f / 2.0f;
 					feature.feature_symbol_names.push_back(r);
 					assert(res > 0);
 				}
@@ -59,6 +65,14 @@ namespace ODB
 					&l->xs, &l->ys, &l->xe, &l->ye, &l->sym_num, &l->polarity, 1);
 				feature.layer_features.push_back(l);
 				assert(res > 0);
+
+				Round* r = dynamic_cast<Round*>(feature.feature_symbol_names[l->sym_num]);
+
+				if (r)
+				{
+					l->is_poly_circle = true;
+					l->circle_radius = r->r * 2.0f;
+				}
 			}
 
 			else if (line[0] == 'A')
@@ -70,7 +84,7 @@ namespace ODB
 
 				Round* r = dynamic_cast<Round*>(feature.feature_symbol_names[a->sym_num]);
 
-				// si c'est un cercle a tracé alors l'indiquer dans Arc
+				// si c'est un cercle a tracer alors l'indiquer dans Arc
 				if (r)
 				{
 					a->is_poly_circle = true;
@@ -84,8 +98,8 @@ namespace ODB
 			else if (line[0] == 'P')
 			{
 				Pad* p = new Pad();
-				int res = sscanf_s(line.c_str(), "P %f %f %d %c",
-					 &p->x, &p->y, &p->apt_def, &p->polarity, 1);
+				int res = sscanf_s(line.c_str(), "P %f %f %d %c %i %i",
+					 &p->x, &p->y, &p->apt_def, &p->polarity, 1, &p->dcode, &p->orient_def);
 
 				feature.layer_features.push_back(p);
 				assert(res > 0);
@@ -104,8 +118,9 @@ namespace ODB
 
 					else if (line.starts_with("OB"))
 					{
-						OB poly;
-						sscanf_s(line.c_str(), "%f %f %c", &poly.xbs, &poly.ybs, &poly.poly_type, 1);
+						OB* poly = new OB();
+						sscanf_s(line.c_str(), "OB %f %f %c", 
+							&poly->xbs, &poly->ybs, &poly->poly_type, 1);
 
 						while (getline(file, line))
 						{
@@ -114,16 +129,20 @@ namespace ODB
 
 							if (line.starts_with("OS"))
 							{
-								OS seg;
-								sscanf_s(line.c_str(), "%f %f %c", &seg.x, &seg.y, &seg.cw, 1);
-								poly.arcs_segments.push_back(seg);
+								OS* seg = new OS();
+								int res = sscanf_s(line.c_str(), "OS %f %f %c",
+									&seg->x, &seg->y, &seg->cw, 1);
+								
+								poly->arcs_segments.push_back(seg);
+								assert(res > 0);
 							}
 							else if (line.starts_with("OC"))
 							{
-								OC arc;
-								sscanf_s(line.c_str(), "%f %f %c",
-									&arc.xe, &arc.ye, &arc.xc, &arc.yc, &arc.cw, 1);
-								poly.arcs_segments.push_back(arc);
+								OC* arc = new OC();
+								int res = sscanf_s(line.c_str(), "OC %f %f %f %f %c",
+									&arc->xe, &arc->ye, &arc->xc, &arc->yc, &arc->cw, 1);
+								poly->arcs_segments.push_back(arc);
+								assert(res > 0);
 							}
 						}
 
@@ -168,11 +187,13 @@ namespace ODB
 		// convertit en polygone line, arc etc... à l'aide des polygones du dessus
 		for (Geometry* geo : feature.layer_features)
 		{
-			if (Line* l = dynamic_cast<Line*>(geo); l != nullptr)
+			/* if (Line* l = dynamic_cast<Line*>(geo); l != nullptr)
 			{
 				assert(l->sym_num != -1 && l->sym_num < symbols_polys->polygon_array.count);
-				Polygon* poly = LineToPolygon(*l, symbols_polys->polygon_array[l->sym_num]);
-				feature_polys->polygon_array.append(poly);
+				Polygon* poly = LineToPolygon(*l);
+
+				if (poly)
+					feature_polys->polygon_array.append(poly);
 			}
 
 			else if (Arc* a = dynamic_cast<Arc*>(geo); a != nullptr)
@@ -189,12 +210,14 @@ namespace ODB
 				assert(p->apt_def != -1 && p->apt_def < symbols_polys->polygon_array.count);
 				Polygon* poly = PadToPolygon(p, *symbols_polys->polygon_array[p->apt_def]);
 				feature_polys->polygon_array.append(poly);
-			}
+			} */
 
-			else if (Surface* s = dynamic_cast<Surface*>(geo); s != nullptr)
+			if (Surface* s = dynamic_cast<Surface*>(geo); s != nullptr)
 			{
-				Polygon* poly = SurfaceToPolygon(s);
-				feature_polys->polygon_array.append(poly);
+				std::vector<Polygon*> polys = SurfaceToPolygon(s);
+
+				for (Polygon* poly : polys)
+					feature_polys->polygon_array.append(poly);
 			}
 		}
 
@@ -205,7 +228,7 @@ namespace ODB
 	gdstk::Polygon* RoundToPolygon(const Round* r)
 	{
 		size_t nb_points = 30;
-		float step_angle = 2.0f * 3.141592f / nb_points;
+		float step_angle = 2.0f * PI / nb_points;
 		gdstk::Polygon* poly = new Polygon();
 
 		for (size_t i = 0; i < nb_points; i++)
@@ -265,14 +288,13 @@ namespace ODB
 	{
 		if (a->is_poly_circle)
 		{
-			size_t nb_points = 200;
 			Vec2 start{ a->xs, a->ys };
 			Vec2 end{ a->xe, a->ye };
 			Vec2 center{ a->xc, a->yc };
 			Vec2 sc = start - center;
 
 			FlexPath* fp = new FlexPath();
-			fp->init(start, nb_points, a->circle_radius, 0, 0.00000001, 0);
+			fp->init(start, 2, a->circle_radius, 0, 0.00000001, 0);
 			fp->elements->end_type = gdstk::EndType::Round;
 
 			float total_angle = std::acos(DotProduct(start - center, end - center));
@@ -280,6 +302,7 @@ namespace ODB
 			if (total_angle == 0)
 				total_angle = PI * 2.0001;
 
+			size_t nb_points = 200;
 			float step_angle = total_angle / nb_points;
 			float radius = Norme(start - center);
 			const double width = a->circle_radius;
@@ -313,28 +336,32 @@ namespace ODB
 	}
 
 
-	gdstk::Polygon* SurfaceToPolygon(const Surface* s)
+	std::vector<gdstk::Polygon*> SurfaceToPolygon(const Surface* s)
 	{
-		Polygon* poly = new Polygon();
+		std::vector<Polygon*> polys;
 
-		for (const OB& ob : s->polys)
+		for (const OB* ob : s->polys)
 		{
-			Vec2 previous_point = { 0, 0 };
+			Polygon* poly = new Polygon();
+			Vec2 previous_point{ ob->xbs, ob->ybs };
+			poly->point_array.append( previous_point );
 
-			for (const Geometry& geo : ob.arcs_segments)
+			// construire le polygone à partir des segments et des arcs
+			for (const Geometry* geo : ob->arcs_segments)
 			{
-				if (const OS* s = dynamic_cast<const OS*>(&geo); s != nullptr)
+				if (const OS* l = dynamic_cast<const OS*>(geo); l != nullptr)
 				{
-					previous_point = Vec2{ s->x, s->y };
-					poly->point_array.append(previous_point);
+					previous_point = Vec2{ l->x, l->y };
+					poly->point_array.append( previous_point );
 				}
 
-				if (const OC* a = dynamic_cast<const OC*>(&geo); a != nullptr)
+				else if (const OC* a = dynamic_cast<const OC*>(geo); a != nullptr)
 				{
 					Vec2 arc_end{ a->xe, a->ye };
 					Vec2 arc_center{ a->xc, a->yc };
 
-					size_t nb_points = 3;
+					size_t nb_points = 10;
+					Vec2 sc = previous_point - arc_center;
 					float dist = Norme(arc_end - arc_center);
 					float step_angle = std::acos(
 						DotProduct(arc_end - arc_center, previous_point - arc_center)) / nb_points;
@@ -342,26 +369,105 @@ namespace ODB
 					for (size_t i = 1; i <= nb_points; i++)
 					{
 						float angle = i * step_angle;
-						Vec2 temp = arc_center + Vec2{ std::cos(angle) * dist, std::sin(angle) * dist };
+						if (a->cw == 'Y') angle *= -1;
+
+						Vec2 temp = 
+							arc_center 
+							+ Vec2{ std::cos(angle) * sc.x - std::sin(angle) * sc.y,
+									std::sin(angle)* sc.x + std::cos(angle) * sc.y };
+
 						poly->point_array.append(temp);
 					}
+
+					previous_point = arc_end;
 				}
 			}
+
+			// changer l'orientation selon "poly_type"
+			if (ob->poly_type == 'I')
+			{
+				Array<Vec2> points = {};
+				points.copy_from(poly->point_array);
+				poly->point_array.clear();
+
+				for (int i = points.count - 1; i >= 0; i--)
+					poly->point_array.append(points[i]);
+			}
+
+			polys.push_back(poly);
 		}
 
-		return poly;
+		return polys;
 	}
 
 
 	gdstk::Polygon* PadToPolygon(const Pad* p, Polygon poly)
 	{
 		Polygon* t_poly = new Polygon();
+		Vec2 pad_pos{ p->x, p->y };
 
-		for (size_t i = 0; i < poly.point_array.count; i++)
-			t_poly->point_array.append(poly.point_array[i] + Vec2{ p->x, p->y });
+		// polarité du pad
+		if (p->polarity == 'N')
+			for (int i = 0; i < poly.point_array.count; i++)
+				t_poly->point_array.append(poly.point_array[i] + pad_pos);
+
+		else
+			for (int i = poly.point_array.count-1; i >= 0; i--)
+				t_poly->point_array.append(poly.point_array[i] + pad_pos);
+
+
+		// calcul du centre du polygone
+		Vec2 center = { 0, 0 };
+
+		for (size_t i = 0; i < t_poly->point_array.count; i++)
+			center += t_poly->point_array[i];
+
+		center /= t_poly->point_array.count;
+
+		// rotation, miroir
+		int rotations[4] = {0, 90, 180 ,270};
+		t_poly->rotate(rotations[p->orient_def], center);
 
 		return t_poly;
 	}
+
+
+gdstk::Polygon* LineToPolygon(const Line& l)
+{
+	if (l.is_poly_circle)
+	{
+		size_t nb_points = 200;
+		Vec2 start{ l.xs, l.ys };
+		Vec2 end{ l.xe, l.ye };
+		const double width = l.circle_radius;
+
+		FlexPath* fp = new FlexPath();
+		fp->init(start, 2, l.circle_radius, 0, 0.00000001, 0);
+		fp->segment(end, &width, NULL, false);
+		fp->elements->end_type = gdstk::EndType::Round;
+
+		Array<Polygon*> arc_poly = {};
+		fp->to_polygons(false, 0, arc_poly);
+		delete fp;
+
+		if (arc_poly.count == 0)
+			return nullptr;
+
+		if (l.polarity == 'P')
+		{
+			Array<Vec2> points;
+			points.copy_from(arc_poly[0]->point_array);
+			arc_poly[0]->point_array.clear();
+
+			for (int i = points.count - 1; i >= 0; i--)
+				arc_poly[0]->point_array.append(points[i]);
+		}
+
+		return arc_poly[0];
+	}
+
+	return nullptr;
+}
 
 
 	float Norme(const Vec2& v)
@@ -454,6 +560,10 @@ namespace ODB
 			line_poly->point_array.append(vertex);
 			index = (index + 1) % nb_vertices;
 		}
+
+		// inverser le polygone selon la polarité
+		Array<Vec2> points = line_poly->point_array;
+		line_poly->point_array.clear();
 
 		return line_poly;
 	}

@@ -18,6 +18,10 @@ namespace Clipper2Utils
 	// convertit les polygones chargés avec gdstk en une suite de polygones Paths64 de clipper2
 	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib);
 
+	std::unique_ptr<PolyTree64> ConvertGdstkPolygonsToPolyTree64(Library& lib);
+
+	std::unique_ptr<PolyTree64> ConvertPaths64ToPolyTree64(const Paths64& paths);
+
 	// Fonction récursive pour récupérer les polygones d'un polytree en polygones gdstk (avec trous)
 	void GetTreeLayerGdstkRecursive(PolyTree64& node,std::vector<gdstk::Polygon*>& polys);
 
@@ -34,6 +38,8 @@ namespace Clipper2Utils
 	// Convertit un polytree64 en une polygones gdstk (avec trous)
 	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output);
 
+	void ConvertPolyTree64ToGdsiiPath2(std::unique_ptr<PolyTree64>& tree, Library& output);
+
 	// convertit un polytree64 en polygones gdstk triés par couches
 	std::vector<Library> ConvertPolyTree64ToGdsiiLayers(PolyTree64& tree);
 
@@ -44,14 +50,25 @@ namespace Clipper2Utils
 	// Fait l'union des polygones polys
 	void MakeUnionPolyTree(const Paths64& polys, PolyTree64& output);
 
+	std::unique_ptr<PolyTree64> MakeUnion(const std::unique_ptr<PolyTree64>& polys);
+
+	std::unique_ptr<PolyTree64> MakeUnion(
+		const std::unique_ptr<PolyTree64>& i1, const std::unique_ptr<PolyTree64>& i2);
+
 	// Fait un dégraissement des polygones de tree de taille deg
-	void MakeDegraissement(const PolyTree64& tree, double deg, PolyTree64& output);
+	std::unique_ptr<PolyTree64> MakeDegraissement(const std::unique_ptr<PolyTree64>& input, double size);
 
 	// Fait la différence entre les polygones de tree et de polys2
-	void MakeDifference(const PolyTree64& tree, const PolyTree64& polys2, PolyTree64& output);
+	std::unique_ptr<PolyTree64> MakeDifference(
+		const std::unique_ptr<PolyTree64>& tree, const std::unique_ptr<PolyTree64>& polys2);
 
 	// Fait l'inverse des polygones actuels
 	void MakeInverse(const PolyTree64& tree, PolyTree64& output);
+
+	std::unique_ptr<PolyTree64> MakeIntersection(
+		const std::unique_ptr<PolyTree64>& input1, const std::unique_ptr<PolyTree64>& input2);
+
+	std::unique_ptr<PolyTree64> MakeMirrorY(const std::unique_ptr<PolyTree64>& input);
 
 	// Triangule les polygones d'un polytree64
 	void MakeTriangulationPolyTree(const PolyTree64& tree, Library& output);

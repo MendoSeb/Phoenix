@@ -22,6 +22,8 @@ struct Line : Geometry
 	float xe, ye;
 	int sym_num = -1; // symbole used with the line
 	char polarity;
+	bool is_poly_circle = false;
+	float circle_radius;
 };
 
 struct Arc : Geometry {
@@ -40,7 +42,8 @@ struct Pad : Geometry {
 	float x, y;
 	int apt_def = -1; // symbol used
 	char polarity;
-	int orient_def;
+	unsigned int dcode = 0;
+	unsigned int orient_def = 0;
 };
 
 struct OS : Geometry{
@@ -57,12 +60,12 @@ struct OC : Geometry {
 struct OB : Geometry {
 	char poly_type; // I for island, H for hole
 	float xbs, ybs;
-	std::vector<Geometry> arcs_segments;
+	std::vector<Geometry*> arcs_segments;
 };
 
 struct Surface : Geometry {
 	char polarity;
-	std::vector<OB> polys;
+	std::vector<OB*> polys;
 };
 
 
@@ -104,8 +107,10 @@ namespace ODB
 	gdstk::Polygon* RoundToPolygon(const Round* r);
 	gdstk::Polygon* RectangleToPolygon(const Rectangle* rect);
 	gdstk::Polygon* ArcToPolygon(const Arc* a);
-	gdstk::Polygon* SurfaceToPolygon(const Surface* s);
+	std::vector<gdstk::Polygon*> SurfaceToPolygon(const Surface* s);
 	gdstk::Polygon* PadToPolygon(const Pad* p, Polygon poly);
+	gdstk::Polygon* LineToPolygon(const Line& l);
+
 
 	/// fonction pour convertir en polygone un symbole tracé le long d'un segment ou d'un arc
 	// calcule la norme d'un vecteur
@@ -117,5 +122,4 @@ namespace ODB
 	std::pair<size_t, size_t> FindFarthestVertices(const Vec2& segment, const Polygon* poly);
 
 	// trace un symbole le long d'une ligne
-	gdstk::Polygon* LineToPolygon(const Line& l, const gdstk::Polygon* poly);
 }
