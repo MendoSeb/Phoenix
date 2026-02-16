@@ -3,19 +3,84 @@
 #include <string>
 #include <iostream>
 #include <sstream> 
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 
 namespace ODB
 {
+	std::map<std::string, std::vector<Polygon*>> readSymbols(std::string folder_path)
+	{
+		std::map<std::string, std::vector<Polygon*>> symbols;
+
+		// read features of steps/
+		for (const auto& entry : fs::directory_iterator(folder_path + "symbols/"))
+		{
+			Feature feature = readFeatureFile((entry.path().string() + "/features").c_str());
+			Cell* cell = ODB::convertODBToPolygons(feature, symbols);
+			Library lib = {};
+			lib.init("library", 1e-6, 1e-9);
+			lib.cell_array.append(cell);
+			GdstkUtils::Normalize(lib, Vec2{ 200, 200 });
+
+			Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
+
+			PolyTree64 u;
+			Library u_lib = {};
+			Clipper2Utils::MakeUnion(paths, u);
+			Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib);
+
+			std::vector<Polygon*> polys;
+			
+			for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+				polys.push_back(lib.cell_array[0]->polygon_array[i]);
+
+			symbols.insert({ entry.path().filename().string(), polys});
+		}
+
+		return symbols;
+	}
+
+	std::vector<Library> readLayers
+	(
+		std::string folder_path, 
+		std::map<std::string, std::vector<Polygon*>>& symbols
+	)
+	{
+		std::vector<Library> libs;
+
+		// read features of steps/
+		for (const auto& entry : fs::directory_iterator(folder_path + "steps/"))
+			for (const auto& layers : fs::directory_iterator(((entry.path().string() + "/layers/"))))
+			{
+				Feature feature = readFeatureFile( (layers.path().string() + "/features").c_str() );
+				Cell* cell = ODB::convertODBToPolygons(feature, symbols);
+				Library lib = {};
+				lib.init("library", 1e-6, 1e-9);
+				lib.cell_array.append(cell);
+				GdstkUtils::Normalize(lib, Vec2{ 200, 200 });
+
+				Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
+
+				PolyTree64 u;
+				Library u_lib = {};
+				Clipper2Utils::MakeUnion(paths, u);
+				Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib);
+
+				libs.push_back(lib);
+				GdstkUtils::SaveToGdsii(u_lib, ("C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/" + layers.path().filename().string() + ".gds").c_str(), false);
+			}
+
+		return libs;
+	}
+
 	Feature readFeatureFile(const char* file_name)
 	{
 		std::ifstream file(file_name);
 
 		if (!file)
-		{
-			std::cout << "erreur d'ouverture" << std::endl;
-			assert(0);
-		}
+			assert(0 && "erreur d'ouverture");
 
 		std::string line;
 		Feature feature;
@@ -38,6 +103,8 @@ namespace ODB
 			else if (line[0] == '$')
 			{
 				int id;
+				float nb;
+				char s[100];
 
 				if (line.find(" rect") != std::string::npos)
 				{
@@ -47,15 +114,28 @@ namespace ODB
 					rect->h /= UNIT_CONVERSION;
 					rect->rad /= UNIT_CONVERSION;
 					feature.feature_symbol_names.push_back(rect);
-					assert(res > 0);
 				}
-				else if (sscanf_s(line.c_str(), "$%d r", &id))
+				else if (sscanf_s(line.c_str(), "$%d r%f", &id, &nb) == 2)
 				{
 					Round* r = new Round();
 					int res = sscanf_s(line.c_str(), "$%d r%f", &id, &r->r);
 					r->r /= 2.0f * UNIT_CONVERSION;
 					feature.feature_symbol_names.push_back(r);
-					assert(res > 0);
+				}
+				else if (line.find("donut_r"))
+				{
+					Donut* d = new Donut();
+					int res = sscanf_s(line.c_str(), "$%d donut_r%fx%f", &d->id, &d->outerd, &d->innerd);
+					d->innerd /= 2.0f * UNIT_CONVERSION;
+					d->outerd /= 2.0f * UNIT_CONVERSION;
+					feature.feature_symbol_names.push_back(d);
+					assert(res == 3);
+				}
+				else if (sscanf_s(line.c_str(), "$%d %s", &id, &s, (unsigned int)sizeof(s)) == 2)
+				{
+					SymbolString* ss = new SymbolString();
+					int res = sscanf_s(line.c_str(), "$%d %s", &ss->id, &ss->s, (unsigned int)sizeof(ss->s));
+					feature.feature_symbol_names.push_back(ss);
 				}
 			}
 			else if (line[0] == 'L')
@@ -167,8 +247,9 @@ namespace ODB
 		return feature;
 	}
 
-
-	Cell* convertODBToPolygons(Feature& feature)
+	Cell* convertODBToPolygons(
+		Feature& feature,
+		std::map<std::string, std::vector<Polygon*>>& symbols)
 	{
 		Cell* symbols_polys = new Cell();
 		Cell* feature_polys = new Cell();
@@ -180,8 +261,20 @@ namespace ODB
 			if (Round* r = dynamic_cast<Round*>(geo); r != nullptr)
 				symbols_polys->polygon_array.append(roundToPolygon(r));
 
-			if (Rectangle* rect = dynamic_cast<Rectangle*>(geo); rect != nullptr)
+			else if (Rectangle* rect = dynamic_cast<Rectangle*>(geo); rect != nullptr)
 				symbols_polys->polygon_array.append(rectangleToPolygon(rect));
+
+			else if (Donut* d = dynamic_cast<Donut*>(geo); d != nullptr)
+				symbols_polys->polygon_array.append(donutToPolygon(d));
+
+			else if (SymbolString* ss = dynamic_cast<SymbolString*>(geo); ss != nullptr)
+			{
+				if (symbols.find(ss->s) != symbols.end())
+				{
+					std::vector<Polygon*> poly = symbols.at(ss->s);
+					symbols_polys->polygon_array.append(poly[0]);
+				}
+			}
 		}
 
 		// convertit en polygone line, arc etc... à l'aide des polygones du dessus
@@ -242,32 +335,31 @@ namespace ODB
 		return poly;
 	}
 
-
 	gdstk::Polygon* rectangleToPolygon(const Rectangle* rect)
 	{
 		Polygon* poly = new Polygon();
 
-		Vec2 p0{ 0.0f, 0.0f }; // Top Left
-		Vec2 p1{ rect->w, 0.0f };
-		Vec2 p2{ 0.0f, rect->h };
-		Vec2 p3{ rect->w, rect->h };
+		Vec2 p0{ -rect->w / 2.0f, -rect->h / 2.0f }; // Top Left
+		Vec2 p1{ rect->w / 2.0f, -rect->h / 2.0f };
+		Vec2 p2{ -rect->w / 2.0f, rect->h / 2.0f };
+		Vec2 p3{ rect->w / 2.0f, rect->h / 2.0f };
 
 		if (rect->rad == 0)
 		{
 			poly->point_array.append(p0);
 			poly->point_array.append(p1);
-			poly->point_array.append(p2);
 			poly->point_array.append(p3);
+			poly->point_array.append(p2);
 		}
 		else
 		{
-			size_t nb_points = 10;
-			float step_angle = PI / (2.0 * nb_points);
-			float start_angles[4] = { PI / 2.0, PI, 1.5 * PI, 0 };
-			Vec2 corners[4] = { p0 + Vec2{rect->rad, -rect->rad},
-								p1 + Vec2{rect->rad, rect->rad},
-								p2 + Vec2{-rect->rad, rect->rad},
-								p3 + Vec2{-rect->rad, -rect->rad} };
+			size_t nb_points = 50;
+			float step_angle = PI / (2.0f * nb_points);
+			float start_angles[4] = { PI, 1.5f * PI, 0.0f, PI / 2.0f };
+			Vec2 corners[4] = { p0 + Vec2{rect->rad, rect->rad},
+								p1 + Vec2{-rect->rad, rect->rad},
+								p3 + Vec2{-rect->rad, -rect->rad},
+								p2 + Vec2{rect->rad, -rect->rad} };
 
 			for (size_t k = 0; k < 4; k++)
 			{
@@ -284,6 +376,31 @@ namespace ODB
 		return poly;
 	}
 
+	gdstk::Polygon* donutToPolygon(const Donut* d)
+	{
+		size_t nb_points = 30;
+		float step_angle = -2.0f * PI / nb_points;
+		gdstk::Polygon* poly = new Polygon();
+
+		// inner contour
+		for (size_t i = 0; i <= nb_points; i++)
+		{
+			double x = std::cos(i * step_angle) * d->innerd;
+			double y = std::sin(i * step_angle) * d->innerd;
+			poly->point_array.append(Vec2{ x, y });
+		}
+
+		// outer contour
+		step_angle = -step_angle;
+		for (size_t i = 0; i <= nb_points; i++)
+		{
+			double x = std::cos(i * step_angle) * d->outerd;
+			double y = std::sin(i * step_angle) * d->outerd;
+			poly->point_array.append(Vec2{ x, y });
+		}
+
+		return poly;
+	}
 
 	gdstk::Polygon* arcToPolygon(const Arc* a)
 	{
@@ -330,12 +447,22 @@ namespace ODB
 			if (arc_poly.count == 0)
 				return nullptr;
 
+			// sinon pour flex_6 ça marche pas
+			if (arc_poly[0]->signed_area() > 0)
+			{
+				Array<Vec2> points;
+				points.copy_from(arc_poly[0]->point_array);
+				arc_poly[0]->point_array.clear();
+
+				for (int k = points.count - 1; k >= 0; k--)
+					arc_poly[0]->point_array.append(points[k]);
+			}
+
 			return arc_poly[0];
 		}
 
 		return nullptr;
 	}
-
 
 	std::vector<gdstk::Polygon*> surfaceToPolygon(const Surface* s)
 	{
@@ -367,7 +494,7 @@ namespace ODB
 					float step_angle = std::acos(
 						dotProduct(arc_end - arc_center, previous_point - arc_center)) / nb_points;
 
-					if (step_angle < 0.0001f)
+					if (arc_end == previous_point)
 						step_angle = (PI * 2.0f) / nb_points;
 
 					for (size_t i = 1; i <= nb_points; i++)
@@ -404,7 +531,6 @@ namespace ODB
 		return polys;
 	}
 
-
 	gdstk::Polygon* padToPolygon(const Pad* p, Polygon poly)
 	{
 		Polygon* t_poly = new Polygon();
@@ -428,12 +554,11 @@ namespace ODB
 		center /= t_poly->point_array.count;
 
 		// rotation, miroir
-		int rotations[4] = {0, 90, 180 ,270};
+		double rotations[10] = {0, PI / 2.0f, PI, 1.5f * PI, 0, PI / 2.0f, PI, 1.5f * PI, 0, 0};
 		t_poly->rotate(rotations[p->orient_def], center);
 
 		return t_poly;
 	}
-
 
 	gdstk::Polygon* lineToPolygon(const Line& l)
 {
@@ -472,24 +597,20 @@ namespace ODB
 	return nullptr;
 }
 
-
 	float norme(const Vec2& v)
 	{
 		return std::sqrt(v.x * v.x + v.y * v.y);
 	}
-
 
 	float sinusOfVectors(const Vec2& v1, const Vec2& v2)
 	{
 		return (v1.x * v2.y - v1.y * v2.x) / (norme(v1) * norme(v2));
 	}
 
-
 	float dotProduct(const Vec2& v1, const Vec2& v2)
 	{
 		return (v1.x * v2.x + v1.y * v2.y) / (norme(v1) * norme(v2));
 	}
-
 
 	std::pair<size_t, size_t> findFarthestVertices(const Vec2& segment, const Polygon* poly)
 	{
@@ -524,7 +645,6 @@ namespace ODB
 
 		return farthest_points;
 	}
-
 
 	gdstk::Polygon* lineToPolygon(const Line& l, const gdstk::Polygon* poly)
 	{

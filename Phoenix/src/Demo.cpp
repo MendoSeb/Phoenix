@@ -294,13 +294,22 @@ namespace Demo
 	{
 		//Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/assemt/features");
 		//Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_8/features");
-		Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_7/features");
+		//Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/flex_6/features");
+		//Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_7/features");
 
-		Cell* cell = ODB::convertODBToPolygons(feature);
+		std::string folder = "C:/Users/PC/Downloads/designodb_rigidflex/";
+		std::map<std::string, std::vector<Polygon*>> symbols = ODB::readSymbols(folder);
+		//std::vector<Library> libs = ODB::readLayers(folder, symbols);
+
+		Feature f = ODB::readFeatureFile(
+			"C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_1/features");
+
+		Cell* c = ODB::convertODBToPolygons(f, symbols);
+
 		Library lib = {};
 		lib.init("library", 1e-6, 1e-9);
-		lib.cell_array.append(cell);
-		GdstkUtils::Normalize(lib, Vec2{ 100, 100 });
+		lib.cell_array.append(c);
+		GdstkUtils::Normalize(lib, Vec2{ 200, 200 });
 
 		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
 
@@ -310,6 +319,7 @@ namespace Demo
 		Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib);
 
 		GdstkUtils::SaveToGdsii(u_lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);
+
 	}
 
 
