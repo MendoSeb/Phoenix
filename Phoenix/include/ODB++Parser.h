@@ -48,13 +48,13 @@ struct Pad : Geometry {
 
 struct OS : Geometry{
 	float x, y;
-	char cw;
+	char cw = '_';
 };
 
 struct OC : Geometry {
 	float xe, ye;
 	float xc, yc;
-	char cw;
+	char cw = '_';
 };
 
 struct OB : Geometry {

@@ -130,7 +130,7 @@ namespace ODB
 							if (line.starts_with("OS"))
 							{
 								OS* seg = new OS();
-								int res = sscanf_s(line.c_str(), "OS %f %f %c",
+								int res = sscanf_s(line.c_str(), "OS %f %f %c", 
 									&seg->x, &seg->y, &seg->cw, 1);
 								
 								poly->arcs_segments.push_back(seg);
@@ -187,7 +187,7 @@ namespace ODB
 		// convertit en polygone line, arc etc... à l'aide des polygones du dessus
 		for (Geometry* geo : feature.layer_features)
 		{
-			/* if (Line* l = dynamic_cast<Line*>(geo); l != nullptr)
+			if (Line* l = dynamic_cast<Line*>(geo); l != nullptr)
 			{
 				assert(l->sym_num != -1 && l->sym_num < symbols_polys->polygon_array.count);
 				Polygon* poly = lineToPolygon(*l);
@@ -210,7 +210,7 @@ namespace ODB
 				assert(p->apt_def != -1 && p->apt_def < symbols_polys->polygon_array.count);
 				Polygon* poly = padToPolygon(p, *symbols_polys->polygon_array[p->apt_def]);
 				feature_polys->polygon_array.append(poly);
-			} */
+			}
 
 			if (Surface* s = dynamic_cast<Surface*>(geo); s != nullptr)
 			{
@@ -360,21 +360,24 @@ namespace ODB
 					Vec2 arc_end{ a->xe, a->ye };
 					Vec2 arc_center{ a->xc, a->yc };
 
-					size_t nb_points = 10;
+					size_t nb_points = 50;
 					Vec2 sc = previous_point - arc_center;
 					float dist = norme(arc_end - arc_center);
 					float step_angle = std::acos(
 						dotProduct(arc_end - arc_center, previous_point - arc_center)) / nb_points;
+
+					if (step_angle < 0.0001f)
+						step_angle = (PI * 2.0f) / nb_points;
 
 					for (size_t i = 1; i <= nb_points; i++)
 					{
 						float angle = i * step_angle;
 						if (a->cw == 'Y') angle *= -1;
 
-						Vec2 temp = 
-							arc_center 
+						Vec2 temp =
+							arc_center
 							+ Vec2{ std::cos(angle) * sc.x - std::sin(angle) * sc.y,
-									std::sin(angle)* sc.x + std::cos(angle) * sc.y };
+									std::sin(angle) * sc.x + std::cos(angle) * sc.y };
 
 						poly->point_array.append(temp);
 					}
@@ -384,7 +387,7 @@ namespace ODB
 			}
 
 			// changer l'orientation selon "poly_type"
-			if (ob->poly_type == 'I')
+			/*if (ob->poly_type == 'I')
 			{
 				Array<Vec2> points = {};
 				points.copy_from(poly->point_array);
@@ -392,7 +395,7 @@ namespace ODB
 
 				for (int i = points.count - 1; i >= 0; i--)
 					poly->point_array.append(points[i]);
-			}
+			}*/
 
 			polys.push_back(poly);
 		}
@@ -410,7 +413,6 @@ namespace ODB
 		if (p->polarity == 'N')
 			for (int i = 0; i < poly.point_array.count; i++)
 				t_poly->point_array.append(poly.point_array[i] + pad_pos);
-
 		else
 			for (int i = poly.point_array.count-1; i >= 0; i--)
 				t_poly->point_array.append(poly.point_array[i] + pad_pos);
@@ -432,7 +434,7 @@ namespace ODB
 	}
 
 
-gdstk::Polygon* lineToPolygon(const Line& l)
+	gdstk::Polygon* lineToPolygon(const Line& l)
 {
 	if (l.is_poly_circle)
 	{
@@ -442,7 +444,7 @@ gdstk::Polygon* lineToPolygon(const Line& l)
 		const double width = l.circle_radius;
 
 		FlexPath* fp = new FlexPath();
-		fp->init(start, 2, l.circle_radius, 0, 0.00000001, 0);
+		fp->init(start, 2, l.circle_radius, 0, 0.000001, 0);
 		fp->segment(end, &width, NULL, false);
 		fp->elements->end_type = gdstk::EndType::Round;
 
