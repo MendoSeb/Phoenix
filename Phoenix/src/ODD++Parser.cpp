@@ -190,6 +190,7 @@ namespace ODB
 			if (Line* l = dynamic_cast<Line*>(geo); l != nullptr)
 			{
 				assert(l->sym_num != -1 && l->sym_num < symbols_polys->polygon_array.count);
+				//Polygon* poly = lineToPolygon(*l, symbols_polys->polygon_array[l->sym_num]);
 				Polygon* poly = lineToPolygon(*l);
 
 				if (poly)
@@ -538,12 +539,11 @@ namespace ODB
 		int nb_vertices = poly->point_array.count;
 
 		size_t index = farthest_points.first;
-		bool run = true;
 
-		while (run)
+		while (1)
 		{
 			if (index == farthest_points.second)
-				run = false;
+				break;
 
 			Vec2 vertex = poly->point_array[index] + line_points[0];
 			line_poly->point_array.append(vertex);
@@ -551,21 +551,16 @@ namespace ODB
 		}
 
 		index = farthest_points.second;
-		run = true;
 
-		while (run)
+		while (1)
 		{
 			if (index == farthest_points.first)
-				run = false;
+				break;
 
 			Vec2 vertex = poly->point_array[index] + line_points[1];
 			line_poly->point_array.append(vertex);
 			index = (index + 1) % nb_vertices;
 		}
-
-		// inverser le polygone selon la polarité
-		Array<Vec2> points = line_poly->point_array;
-		line_poly->point_array.clear();
 
 		return line_poly;
 	}

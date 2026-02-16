@@ -292,15 +292,15 @@ namespace Demo
 
 	void odbDemo()
 	{
-		//Feature feature = ODB::ReadFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/assemt/features");
-		Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_8/features");
-		//Feature feature = ODB::ReadFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_7/features");
+		//Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/assemt/features");
+		//Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_8/features");
+		Feature feature = ODB::readFeatureFile("C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_7/features");
 
 		Cell* cell = ODB::convertODBToPolygons(feature);
 		Library lib = {};
 		lib.init("library", 1e-6, 1e-9);
 		lib.cell_array.append(cell);
-		GdstkUtils::Normalize(lib, Vec2{ 10, 10 });
+		GdstkUtils::Normalize(lib, Vec2{ 100, 100 });
 
 		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
 

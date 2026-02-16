@@ -110,6 +110,7 @@ namespace ODB
 	std::vector<gdstk::Polygon*> surfaceToPolygon(const Surface* s);
 	gdstk::Polygon* padToPolygon(const Pad* p, Polygon poly);
 	gdstk::Polygon* lineToPolygon(const Line& l);
+	gdstk::Polygon* lineToPolygon(const Line& l, const gdstk::Polygon* poly);
 
 
 	/// fonction pour convertir en polygone un symbole tracé le long d'un segment ou d'un arc
