@@ -22,7 +22,6 @@ namespace ODB
 			Library lib = {};
 			lib.init("library", 1e-6, 1e-9);
 			lib.cell_array.append(cell);
-			//GdstkUtils::Scale(lib, 1e4);
 
 			std::vector<Polygon*> polys;
 			
@@ -264,8 +263,13 @@ namespace ODB
 			{
 				if (symbols.find(ss->s) != symbols.end())
 				{
-					std::vector<Polygon*> poly = symbols.at(ss->s);
-					symbols_polys->polygon_array.append(poly[0]);
+					Polygon* poly = new Polygon();
+
+					// je retourne car apparement l'ordre est mauvais de base
+					for (int i = symbols.at(ss->s)[0]->point_array.count - 1; i >= 0; i--)
+						poly->point_array.append(symbols.at(ss->s)[0]->point_array[i]);
+
+					symbols_polys->polygon_array.append(poly);
 				}
 			}
 		}
