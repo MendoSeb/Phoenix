@@ -9,11 +9,11 @@
 
 namespace Clipper2Utils
 {
-	Paths64 ConvertGdstkPolygonsToPaths64(Library& lib)
+	PathsD ConvertGdstkPolygonsToPathsD(Library& lib)
 	{
 		assert(lib.cell_array.count == 1);
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		Paths64 paths;
+		PathsD paths;
 		paths.resize(lib.cell_array[0]->polygon_array.count);
 
 		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
@@ -22,7 +22,7 @@ namespace Clipper2Utils
 			paths[i].resize(p->point_array.count);
 
 			for (size_t m = 0; m < p->point_array.count; m++)
-				paths[i][m] = Point64((uint64_t)p->point_array[m].x, (uint64_t)p->point_array[m].y);
+				paths[i][m] = PointD((uint64_t)p->point_array[m].x, (uint64_t)p->point_array[m].y);
 		}
 		
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -31,10 +31,10 @@ namespace Clipper2Utils
 	}
 
 
-	std::unique_ptr<PolyTree64> ConvertGdstkPolygonsToPolyTree64(Library& lib)
+	std::unique_ptr<PolyTreeD> ConvertGdstkPolygonsToPolyTreeD(Library& lib)
 	{
-		auto output = std::make_unique<PolyTree64>();
-		Paths64 paths = ConvertGdstkPolygonsToPaths64(lib);
+		auto output = std::make_unique<PolyTreeD>();
+		PathsD paths = ConvertGdstkPolygonsToPathsD(lib);
 
 		for (size_t i = 0; i < paths.size(); i++)
 			output->AddChild(paths[i]);
@@ -43,7 +43,7 @@ namespace Clipper2Utils
 	}
 
 
-	Library ConvertPaths64ToGdsii(const Paths64& polys)
+	Library ConvertPathsDToGdsii(const PathsD& polys)
 	{
 		gdstk::Library lib = {};
 		lib.init("library", 1e-6, 1e-9);
@@ -52,11 +52,11 @@ namespace Clipper2Utils
 		cell->name = copy_string("FIRST", NULL);
 		lib.cell_array.append(cell);
 
-		for (const Path64& poly : polys)
+		for (const PathD& poly : polys)
 		{
 			gdstk::Polygon* p_new = (Polygon*)allocate_clear(sizeof(Polygon));
 
-			for (const Point64& point : poly)
+			for (const PointD& point : poly)
 				p_new->point_array.append(Vec2{ (double)point.x, (double)point.y });
 
 			cell->polygon_array.append(p_new);
@@ -66,9 +66,9 @@ namespace Clipper2Utils
 	}
 
 
-	std::unique_ptr<PolyTree64> ConvertPaths64ToPolyTree64(const Paths64& paths)
+	std::unique_ptr<PolyTreeD> ConvertPathsDToPolyTreeD(const PathsD& paths)
 	{
-		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+		std::unique_ptr<PolyTreeD> output = std::make_unique<PolyTreeD>();
 
 		for (size_t i = 0; i < paths.size(); i++)
 			output->AddChild(paths[i]);
@@ -77,7 +77,7 @@ namespace Clipper2Utils
 	}
 
 
-	void GetTreeLayerGdstkRecursive(PolyTree64& node, std::vector<gdstk::Polygon*>& polys)
+	void GetTreeLayerGdstkRecursive(PolyTreeD& node, std::vector<gdstk::Polygon*>& polys)
 	{
 		// parcourir l'arbre
 		for (size_t i = 0; i < node.Count(); i++)
@@ -87,13 +87,13 @@ namespace Clipper2Utils
 		if (!node.IsHole() && node.Polygon().size() > 0)
 		{
 			Polygon* poly = (Polygon*)allocate_clear(sizeof(Polygon));
-			Path64 poly_parent = node.Polygon();
+			PathD poly_parent = node.Polygon();
 
 			// ajouter les polygones enfants au polygone gdstk
 			for (size_t k = 0; k < node.Count(); k++)
 			{
-				Path64 current_path;
-				Path64 child_poly = node.Child(k)->Polygon();
+				PathD current_path;
+				PathD child_poly = node.Child(k)->Polygon();
 				int nb_points_parent = poly_parent.size();
 				int nb_points_child = child_poly.size();
 				double min_dist = INT32_MAX;
@@ -117,27 +117,27 @@ namespace Clipper2Utils
 
 				// ajouter les sommets du parent jusqu'au parent_index
 				for (size_t a = 0; a <= parent_index; a++)
-					current_path.push_back(Point64{ poly_parent[a].x, poly_parent[a].y });
+					current_path.push_back(PointD{ poly_parent[a].x, poly_parent[a].y });
 
 				// ajouter les sommets de l'enfant en partant de child_index
 				for (size_t a = 0; a < child_poly.size() + 1; a++)
 				{
 					int temp = (child_index + a) % nb_points_child;
-					current_path.push_back(Point64{ child_poly[temp].x, child_poly[temp].y });
+					current_path.push_back(PointD{ child_poly[temp].x, child_poly[temp].y });
 				}
 
 				// fermer le contour parent
 				for (size_t a = parent_index; a < nb_points_parent; a++)
 				{
 					int temp = a % nb_points_parent;
-					current_path.push_back(Point64{ poly_parent[temp].x, poly_parent[temp].y });
+					current_path.push_back(PointD{ poly_parent[temp].x, poly_parent[temp].y });
 				}
 
 				poly_parent = current_path;
 			}
 
 			// convertir current_path en polygone gdstk
-			for (const Point64& point : poly_parent)
+			for (const PointD& point : poly_parent)
 				poly->point_array.append(Vec2{ (double)point.x, (double)point.y });
 
 			polys.push_back(poly);
@@ -145,7 +145,7 @@ namespace Clipper2Utils
 	}
 
 
-	void ConvertPolyTree64ToGdsiiPath(PolyTree64& tree, Library& output)
+	void ConvertPolyTreeDToGdsiiPath(PolyTreeD& tree, Library& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -166,11 +166,11 @@ namespace Clipper2Utils
 		cell->polygon_array = gdstk_polys;
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "conversion polytree64 vers gdstk " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+		std::cout << "conversion PolyTreeD vers gdstk " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
 	}
 
 
-	void ConvertPolyTree64ToGdsiiPath2(std::unique_ptr<PolyTree64>& tree, Library& output)
+	void ConvertPolyTreeDToGdsiiPath2(std::unique_ptr<PolyTreeD>& tree, Library& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -191,18 +191,18 @@ namespace Clipper2Utils
 		cell->polygon_array = gdstk_polys;
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "conversion polytree64 vers gdstk " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+		std::cout << "conversion PolyTreeD vers gdstk " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
 	}
 
 
-	void GetTreeLayersRecusrive(PolyTree64& node, int depth, std::vector<Paths64>& layers)
+	void GetTreeLayersRecusrive(PolyTreeD& node, int depth, std::vector<PathsD>& layers)
 	{
 		// parcourir les enfants
 		for (size_t i = 0; i < node.Count(); i++)
 			GetTreeLayersRecusrive(*node.Child(i), depth + 1, layers);
 
 		// enregistrer le polygone dans la bonne couche
-		Path64 p = node.Polygon();
+		PathD p = node.Polygon();
 
 		if (layers.size() < depth)
 			layers.resize(depth);
@@ -211,7 +211,7 @@ namespace Clipper2Utils
 	}
 
 
-	void GetTreeLayerEarcutRecursive(PolyTree64& node, earcutPolys& polys)
+	void GetTreeLayerEarcutRecursive(PolyTreeD& node, earcutPolys& polys)
 	{
 		// parcourir l'arbre
 		for (size_t i = 0; i < node.Count(); i++)
@@ -220,13 +220,13 @@ namespace Clipper2Utils
 		// ajouter le polygone plein et ses enfants comme trou
 		if (!node.IsHole())
 		{
-			Path64 poly_parent = node.Polygon();
+			PathD poly_parent = node.Polygon();
 			earcutPoly poly;
 
 			// ajouter le polygone parent
 			std::vector<earcutPoint> parent;
 
-			for (Point64& point : poly_parent)
+			for (PointD& point : poly_parent)
 				parent.push_back(earcutPoint{ (double)point.x,(double) point.y });
 
 			poly.push_back(parent);
@@ -236,7 +236,7 @@ namespace Clipper2Utils
 			{
 				std::vector<earcutPoint> child;
 
-				for (const Point64& point : node.Child(k)->Polygon())
+				for (const PointD& point : node.Child(k)->Polygon())
 					child.push_back(earcutPoint{ (double)point.x,(double)point.y });
 
 				poly.push_back(child);
@@ -247,15 +247,15 @@ namespace Clipper2Utils
 	}
 
 
-	std::vector<Library> ConvertPolyTree64ToGdsiiLayers(PolyTree64& polys)
+	std::vector<Library> ConvertPolyTreeDToGdsiiLayers(PolyTreeD& polys)
 	{
-		std::vector<Paths64> paths64_layers;
-		GetTreeLayersRecusrive(polys, 1, paths64_layers);
+		std::vector<PathsD> PathsD_layers;
+		GetTreeLayersRecusrive(polys, 1, PathsD_layers);
 
 		std::vector<Library> layers;
 
-		for (size_t i = 0; i < paths64_layers.size(); i++)
-			layers.push_back(ConvertPaths64ToGdsii(paths64_layers[i]));
+		for (size_t i = 0; i < PathsD_layers.size(); i++)
+			layers.push_back(ConvertPathsDToGdsii(PathsD_layers[i]));
 
 		return layers;
 	}
@@ -270,7 +270,7 @@ namespace Clipper2Utils
 		GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 12, 12);
 		//GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 300000, 300000);
 		GdstkUtils::Normalize(lib1, Vec2{10, 10});
-		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib1);
+		PathsD paths = Clipper2Utils::ConvertGdstkPolygonsToPathsD(lib1);
 
 		Library lib = {};
 		Clipper2Utils::MakeTriangulationPaths(paths, lib);
@@ -283,11 +283,11 @@ namespace Clipper2Utils
 	}
 
 
-	void MakeUnion(const Paths64& polys, PolyTree64& output)
+	void MakeUnion(const PathsD& polys, PolyTreeD& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-		Clipper64 cd;
+		ClipperD cd;
 		cd.AddSubject(polys);
 		cd.Execute(ClipType::Union, FillRule::NonZero, output);
 
@@ -296,42 +296,42 @@ namespace Clipper2Utils
 	}
 
 
-	std::unique_ptr<PolyTree64> MakeUnion(const std::unique_ptr<PolyTree64>& polys)
+	std::unique_ptr<PolyTreeD> MakeUnion(const std::unique_ptr<PolyTreeD>& polys)
 	{
-		auto output = std::make_unique<PolyTree64>();
+		auto output = std::make_unique<PolyTreeD>();
 
-		Clipper64 cd;
-		cd.AddSubject(PolyTreeToPaths64(*polys));
+		ClipperD cd;
+		cd.AddSubject(PolyTreeToPathsD(*polys));
 		cd.Execute(ClipType::Union, FillRule::NonZero, *output);
 
 		return output;
 	}
 
 
-	std::unique_ptr<PolyTree64> MakeUnion(
-		const std::unique_ptr<PolyTree64>& i1, const std::unique_ptr<PolyTree64>& i2)
+	std::unique_ptr<PolyTreeD> MakeUnion(
+		const std::unique_ptr<PolyTreeD>& i1, const std::unique_ptr<PolyTreeD>& i2)
 	{
-		auto output = std::make_unique<PolyTree64>();
+		auto output = std::make_unique<PolyTreeD>();
 
-		Clipper64 cd;
-		cd.AddSubject(PolyTreeToPaths64(*i1));
-		cd.AddSubject(PolyTreeToPaths64(*i2));
+		ClipperD cd;
+		cd.AddSubject(PolyTreeToPathsD(*i1));
+		cd.AddSubject(PolyTreeToPathsD(*i2));
 		cd.Execute(ClipType::Union, FillRule::NonZero, *output);
 
 		return output;
 	}
 
 
-	std::unique_ptr<PolyTree64> MakeDegraissement(const std::unique_ptr<PolyTree64>& input, double deg)
+	std::unique_ptr<PolyTreeD> MakeDegraissement(const std::unique_ptr<PolyTreeD>& input, double deg)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
-		Paths64 paths = PolyTreeToPaths64(*input);
+		std::unique_ptr<PolyTreeD> output = std::make_unique<PolyTreeD>();
+		PathsD paths = PolyTreeToPathsD(*input);
 
 		// dégraissement
 		ClipperOffset offsetter;
-		offsetter.AddPaths(paths, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
-		offsetter.Execute(deg, *output);
+		//offsetter.AddPaths(paths, Clipper2Lib::JoinType::Round, Clipper2Lib::EndType::Polygon);
+		//offsetter.Execute(deg, *output);
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Degraissement fait en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
@@ -340,19 +340,19 @@ namespace Clipper2Utils
 	}
 
 
-	std::unique_ptr<PolyTree64> MakeDifference
+	std::unique_ptr<PolyTreeD> MakeDifference
 	(
-		const std::unique_ptr<PolyTree64>& polys1, 
-		const std::unique_ptr<PolyTree64>& polys2
+		const std::unique_ptr<PolyTreeD>& polys1, 
+		const std::unique_ptr<PolyTreeD>& polys2
 	)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-		Paths64 input1 = PolyTreeToPaths64(*polys1);
-		Paths64 input2 = PolyTreeToPaths64(*polys2);
-		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+		PathsD input1 = PolyTreeToPathsD(*polys1);
+		PathsD input2 = PolyTreeToPathsD(*polys2);
+		std::unique_ptr<PolyTreeD> output = std::make_unique<PolyTreeD>();
 
-		Clipper64 cd;
+		ClipperD cd;
 		cd.AddSubject(input1);
 		cd.AddClip(input2);
 		cd.Execute(ClipType::Difference, FillRule::NonZero, *output);
@@ -364,19 +364,19 @@ namespace Clipper2Utils
 	}
 
 
-	void MakeInverse(const PolyTree64& tree, PolyTree64& output)
+	void MakeInverse(const PolyTreeD& tree, PolyTreeD& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-		Paths64 input = PolyTreeToPaths64(tree);
+		PathsD input = PolyTreeToPathsD(tree);
 
 		// trouver la boite englobante de tous les polygones pour créer le masque de fond
-		Point64 min = Point64(INT64_MAX, INT64_MAX);
-		Point64 max = Point64(INT64_MIN, INT64_MIN);
+		PointD min = PointD(INT64_MAX, INT64_MAX);
+		PointD max = PointD(INT64_MIN, INT64_MIN);
 
-		for (const Path64& poly : input)
+		for (const PathD& poly : input)
 		{
-			for (const Point64& point : poly)
+			for (const PointD& point : poly)
 			{
 				min.x = std::min(min.x, point.x);
 				min.y = std::min(min.y, point.y);
@@ -386,16 +386,16 @@ namespace Clipper2Utils
 		}
 
 		// créer le masque à partir des bornes
-		Path64 mask;
-		mask.push_back(Point64(min.x, min.y));
-		mask.push_back(Point64(min.x, max.y));
-		mask.push_back(Point64(max.x, max.y));
-		mask.push_back(Point64(max.x, min.y));
+		PathD mask;
+		mask.push_back(PointD(min.x, min.y));
+		mask.push_back(PointD(min.x, max.y));
+		mask.push_back(PointD(max.x, max.y));
+		mask.push_back(PointD(max.x, min.y));
 
-		Paths64 masks;
+		PathsD masks;
 		masks.push_back(mask);
 
-		Clipper64 cd;
+		ClipperD cd;
 		cd.AddSubject(masks);
 		cd.AddClip(input);
 		cd.Execute(ClipType::Difference, FillRule::NonZero, output);
@@ -405,17 +405,17 @@ namespace Clipper2Utils
 	}
 
 
-	std::unique_ptr<PolyTree64> MakeIntersection
+	std::unique_ptr<PolyTreeD> MakeIntersection
 	(
-		const std::unique_ptr<PolyTree64>& input1,
-		const std::unique_ptr<PolyTree64>& input2
+		const std::unique_ptr<PolyTreeD>& input1,
+		const std::unique_ptr<PolyTreeD>& input2
 	)
 	{
-		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
-		Paths64 paths1 = PolyTreeToPaths64(*input1);
-		Paths64 paths2 = PolyTreeToPaths64(*input2);
+		std::unique_ptr<PolyTreeD> output = std::make_unique<PolyTreeD>();
+		PathsD paths1 = PolyTreeToPathsD(*input1);
+		PathsD paths2 = PolyTreeToPathsD(*input2);
 
-		Clipper64 cd;
+		ClipperD cd;
 		cd.AddSubject(paths1);
 		cd.AddClip(paths2);
 		cd.Execute(ClipType::Intersection, FillRule::NonZero, *output);
@@ -424,18 +424,18 @@ namespace Clipper2Utils
 	}
 
 
-	std::unique_ptr<PolyTree64> MakeMirrorY(const std::unique_ptr<PolyTree64>& input)
+	std::unique_ptr<PolyTreeD> MakeMirrorY(const std::unique_ptr<PolyTreeD>& input)
 	{
-		Paths64 paths = PolyTreeToPaths64(*input);
+		PathsD paths = PolyTreeToPathsD(*input);
 
-		for (Path64& path : paths)
-			for (Point64& point : path)
+		for (PathD& path : paths)
+			for (PointD& point : path)
 				point.y = -point.y;
 
 
-		std::unique_ptr<PolyTree64> output = std::make_unique<PolyTree64>();
+		std::unique_ptr<PolyTreeD> output = std::make_unique<PolyTreeD>();
 
-		Clipper64 cd;
+		ClipperD cd;
 		cd.AddSubject(paths);
 		cd.Execute(ClipType::Union, FillRule::NonZero, *output);
 
@@ -443,15 +443,15 @@ namespace Clipper2Utils
 	}
 
 
-	void MakeTriangulationPolyTree(const PolyTree64& tree, Library& output)
+	void MakeTriangulationPolyTree(const PolyTreeD& tree, Library& output)
 	{
 		printf("\nTriangulation Clipper2\n");
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		Paths64 input = PolyTreeToPaths64(tree);
-		Paths64 paths_output;
+		PathsD input = PolyTreeToPathsD(tree);
+		PathsD paths_output;
 
-		Triangulate(input, paths_output, false);
-		output = ConvertPaths64ToGdsii(paths_output);
+		//Triangulate(input, paths_output, false);
+		output = ConvertPathsDToGdsii(paths_output);
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Triangulation faite: " << paths_output.size() << " en: "
@@ -459,21 +459,21 @@ namespace Clipper2Utils
 	}
 
 
-	void MakeTriangulationPaths(Paths64& paths, Library& output)
+	void MakeTriangulationPaths(PathsD& paths, Library& output)
 	{
-		Paths64 final;
+		PathsD final;
 
-		for (Path64& path : paths)
+		for (PathD& path : paths)
 		{
-			Paths64 path_output;
-			Paths64 temp;
+			PathsD path_output;
+			PathsD temp;
 			temp.push_back(path);
 
-			Triangulate(temp, path_output, true);
+			//Triangulate(temp, path_output, true);
 			final.insert(final.end(), path_output.begin(), path_output.end());
 		}
 
-		output = ConvertPaths64ToGdsii(final);
+		output = ConvertPathsDToGdsii(final);
 	}
 
 

@@ -37,21 +37,21 @@ namespace Demo
 		GdstkUtils::RepeatAndTranslateGdstk(lib, 4, 3, 12, 12); // pour solder.gds
 		GdstkUtils::Normalize(lib, Vec2{ 120.0f, 90.0f });
 
-		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
+		PathsD paths = Clipper2Utils::ConvertGdstkPolygonsToPathsD(lib);
 
 		// structures qui vont être utilisés en passage par référence
-		PolyTree64 u, inverse, deg, diff;
+		PolyTreeD u, inverse, deg, diff;
 		Library u_lib{}, inverse_lib{}, deg_lib{}, diff_lib{}, u_lib2{}, clipper2_lib{}, clipper2_inverse_lib{};
 
 		// union
 		Clipper2Utils::MakeUnion(paths, u);
-		Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib);
+		Clipper2Utils::ConvertPolyTreeDToGdsiiPath(u, u_lib);
 		GdstkUtils::SaveToGdsii(u_lib, (root_path + "union.gds").c_str(), false);
 		paths.clear();
 
 		// inverse
 		/*Clipper2Utils::MakeInverse(u, inverse);
-		Clipper2Utils::ConvertPolyTree64ToGdsiiPath(inverse, inverse_lib);
+		Clipper2Utils::ConvertPolyTreeDToGdsiiPath(inverse, inverse_lib);
 		GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str(), false); */
 
 		// triangulation avec clipper2
@@ -71,12 +71,12 @@ namespace Demo
 		/*
 		// degraissement
 		Clipper2Utils::MakeDegraissement(u, -1, deg);
-		Clipper2Utils::ConvertPolyTree64ToGdsiiPath(deg, deg_lib);
+		Clipper2Utils::ConvertPolyTreeDToGdsiiPath(deg, deg_lib);
 		GdstkUtils::SaveToGdsii(deg_lib, (root_path + "degraissement.gds").c_str(), false);
 
 		// difference
 		Clipper2Utils::MakeDifference(u, deg, diff);
-		Clipper2Utils::ConvertPolyTree64ToGdsiiPath(diff, diff_lib);
+		Clipper2Utils::ConvertPolyTreeDToGdsiiPath(diff, diff_lib);
 		GdstkUtils::SaveToGdsii(diff_lib, (root_path + "difference.gds").c_str(), false);
 		deg.Clear();
 		diff.Clear();*/
@@ -89,7 +89,7 @@ namespace Demo
 		tris.clear();
 
 		// triangulation of union in several layers with earcut
-		std::vector<Library> union_layers = Clipper2Utils::ConvertPolyTree64ToGdsiiLayers(u);
+		std::vector<Library> union_layers = Clipper2Utils::ConvertPolyTreeDToGdsiiLayers(u);
 		tris = Utils::EarcutTriangulation(union_layers);
 		Utils::WriteLayersObj(tris, (root_path + "triangulation_multi_couches_earcut.obj").c_str());
 
@@ -103,7 +103,7 @@ namespace Demo
 		std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/gdstk/";
 
 		Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-		GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12); // factor moins grand qu'avec clipper car pas de conversion en int64_t
+		GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12); // factor moins grand qu'avec clipper car pas de conversion en intD_t
 		GdstkUtils::Normalize(lib, Vec2{ 10, 10 });
 
 		// scale pour la précision et union
@@ -299,27 +299,26 @@ namespace Demo
 
 		std::string folder = "C:/Users/PC/Downloads/designodb_rigidflex/";
 		std::map<std::string, std::vector<Polygon*>> symbols = ODB::readSymbols(folder);
-		//std::vector<Library> libs = ODB::readLayers(folder, symbols);
+		std::vector<Library> libs = ODB::readLayers(folder, symbols);
 
-		Feature f = ODB::readFeatureFile(
-			"C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/signal_1/features");
+		/*Feature f = ODB::readFeatureFile(
+			"C:/Users/PC/Downloads/designodb_rigidflex/steps/cellular_flip-phone/layers/soldermask_top/features");
 
 		Cell* c = ODB::convertODBToPolygons(f, symbols);
 
 		Library lib = {};
 		lib.init("library", 1e-6, 1e-9);
 		lib.cell_array.append(c);
-		GdstkUtils::Normalize(lib, Vec2{ 200, 200 });
+		GdstkUtils::Scale(lib, 1e3);
 
-		Paths64 paths = Clipper2Utils::ConvertGdstkPolygonsToPaths64(lib);
+		PathsD paths = Clipper2Utils::ConvertGdstkPolygonsToPathsD(lib);
 
-		PolyTree64 u;
+		PolyTreeD u;
 		Library u_lib = {};
 		Clipper2Utils::MakeUnion(paths, u);
-		Clipper2Utils::ConvertPolyTree64ToGdsiiPath(u, u_lib);
+		Clipper2Utils::ConvertPolyTreeDToGdsiiPath(u, u_lib);
 
-		GdstkUtils::SaveToGdsii(u_lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);
-
+		GdstkUtils::SaveToGdsii(u_lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);*/
 	}
 
 
@@ -457,7 +456,7 @@ namespace Demo
 	{
 		std::string file1 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/0 - Image Primaire PHC Mire Externe.gds";
 		std::string file2 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/58a0_Solder CENTRE TROUS BOTTOM.gds";
-		std::string file3 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/004672-647720058a0.bot_CENTRE_Nettoyé.gds";
+		std::string file3 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/004672-D7720058a0.bot_CENTRE_Nettoyé.gds";
 
 		Library i1_lib = GdstkUtils::LoadGDS(file1.c_str());
 		Library i2_lib = GdstkUtils::LoadGDS(file2.c_str());
@@ -469,9 +468,9 @@ namespace Demo
 
 		using namespace Clipper2Utils;
 
-		std::unique_ptr<PolyTree64> i1 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(i1_lib));
-		std::unique_ptr<PolyTree64> i2 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(i2_lib));
-		std::unique_ptr<PolyTree64> i3 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(i3_lib));
+		std::unique_ptr<PolyTreeD> i1 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTreeD(i1_lib));
+		std::unique_ptr<PolyTreeD> i2 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTreeD(i2_lib));
+		std::unique_ptr<PolyTreeD> i3 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTreeD(i3_lib));
 
 		// MirrorY(union(i1, Diff(Size(i2, -0.03), Size(i2, -0.07))))
 		// MirrorY(union(i1,Size(diff(i2,interSize(i2,i3,-0.04)),-0.07)))
@@ -481,7 +480,7 @@ namespace Demo
 
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-		std::vector<std::unique_ptr<PolyTree64>> operations;
+		std::vector<std::unique_ptr<PolyTreeD>> operations;
 		operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDifference(MakeDegraissement(i2, -30), MakeDegraissement(i2, -70)))));
 		operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDegraissement(MakeDifference(i2, MakeDegraissement(MakeIntersection(i2, i3), -40)), -70))));
 		operations.push_back(MakeMirrorY(MakeUnion(i1, MakeDegraissement(MakeDifference(i2, MakeDegraissement(MakeIntersection(i2, i3), -60)), -30))));
@@ -495,7 +494,7 @@ namespace Demo
 		for (auto& op : operations)
 		{
 			Library lib = {};
-			Clipper2Utils::ConvertPolyTree64ToGdsiiPath2(op, lib);
+			Clipper2Utils::ConvertPolyTreeDToGdsiiPath2(op, lib);
 			GdstkUtils::SaveToGdsii(lib, ("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/test" + std::to_string(i) + ".gds").c_str(), false);
 			i++;
 		}
@@ -531,13 +530,13 @@ namespace Demo
 			Library la = GdstkUtils::LoadGDS(artwork_files[i].c_str());
 			Library lp = GdstkUtils::LoadGDS(phoenix_files[i].c_str());
 
-			std::unique_ptr<PolyTree64> pa = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(la));
-			std::unique_ptr<PolyTree64> pp = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTree64(lp));
+			std::unique_ptr<PolyTreeD> pa = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTreeD(la));
+			std::unique_ptr<PolyTreeD> pp = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTreeD(lp));
 
-			std::unique_ptr<PolyTree64> output = MakeDifference(pa, pp);
+			std::unique_ptr<PolyTreeD> output = MakeDifference(pa, pp);
 
 			Library lib = {};
-			Clipper2Utils::ConvertPolyTree64ToGdsiiPath2(output, lib);
+			Clipper2Utils::ConvertPolyTreeDToGdsiiPath2(output, lib);
 			GdstkUtils::SaveToGdsii(lib, ("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/comparaison_artwork_phoenix/comparaison_" + std::to_string(index) + ".gds").c_str(), false);
 			index++;
 		}
