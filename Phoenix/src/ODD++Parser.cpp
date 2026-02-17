@@ -22,7 +22,7 @@ namespace ODB
 			Library lib = {};
 			lib.init("library", 1e-6, 1e-9);
 			lib.cell_array.append(cell);
-			GdstkUtils::Scale(lib, 1e5);
+			//GdstkUtils::Scale(lib, 1e4);
 
 			std::vector<Polygon*> polys;
 			
@@ -56,13 +56,13 @@ namespace ODB
 
 				PathsD paths = Clipper2Utils::ConvertGdstkPolygonsToPathsD(lib);
 
-			/*	PolyTreeD u;
+				PolyTreeD u;
 				Library u_lib = {};
 				Clipper2Utils::MakeUnion(paths, u);
-				Clipper2Utils::ConvertPolyTreeDToGdsiiPath(u, u_lib);*/
+				Clipper2Utils::ConvertPolyTreeDToGdsiiPath(u, u_lib);
 
 				libs.push_back(lib);
-				GdstkUtils::SaveToGdsii(lib, ("C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/" + layers.path().filename().string() + ".gds").c_str(), false);
+				GdstkUtils::SaveToGdsii(u_lib, ("C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/" + layers.path().filename().string() + ".gds").c_str(), false);
 			}
 
 		return libs;
@@ -339,7 +339,7 @@ namespace ODB
 		Vec2 p2{ -rect->w / 2.0f, rect->h / 2.0f }; // TL
 		Vec2 p3{ rect->w / 2.0f, rect->h / 2.0f }; // TR
 
-		if (rect->rad > -1)
+		if (rect->rad == 0)
 		{
 			poly->point_array.append(p0);
 			poly->point_array.append(p1);
@@ -427,7 +427,7 @@ namespace ODB
 
 			float total_angle = std::acos(dotProduct(start - center, end - center));
 			
-			if (total_angle == 0)
+			if (start == end)
 				total_angle = PI * 2.0001;
 
 			size_t nb_points = 200;

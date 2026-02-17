@@ -309,7 +309,7 @@ namespace Demo
 		Library lib = {};
 		lib.init("library", 1e-6, 1e-9);
 		lib.cell_array.append(c);
-		GdstkUtils::Scale(lib, 1e3);
+		GdstkUtils::Scale(lib, 1e5);
 
 		PathsD paths = Clipper2Utils::ConvertGdstkPolygonsToPathsD(lib);
 

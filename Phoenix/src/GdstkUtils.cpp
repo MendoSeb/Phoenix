@@ -262,7 +262,7 @@ namespace GdstkUtils
 			}
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "Normalisation en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
+		//std::cout << "Normalisation en " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
 	}
 
 
@@ -383,5 +383,32 @@ namespace GdstkUtils
 		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
 			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
 				lib.cell_array[0]->polygon_array[i]->point_array[k] *= scale;
+	}
+
+
+	float FindMinimum(const Library& lib)
+	{
+		double min = DBL_MAX;
+
+		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+			{
+				double temp_min = std::min(
+					lib.cell_array[0]->polygon_array[i]->point_array[k].x,
+					lib.cell_array[0]->polygon_array[i]->point_array[k].y
+				);
+
+				min = std::min(min, temp_min);
+			}
+
+		return min;
+	}
+
+
+	void Add(Library& lib, float value)
+	{
+		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+				lib.cell_array[0]->polygon_array[i]->point_array[k] += value;
 	}
 }

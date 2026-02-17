@@ -22,7 +22,10 @@ namespace Clipper2Utils
 			paths[i].resize(p->point_array.count);
 
 			for (size_t m = 0; m < p->point_array.count; m++)
-				paths[i][m] = PointD((uint64_t)p->point_array[m].x, (uint64_t)p->point_array[m].y);
+			{
+				paths[i][m] = PointD(p->point_array[m].x, p->point_array[m].y);
+				//std::cout << p->point_array[m].x << ", " << (uint64_t)p->point_array[m].x << std::endl;
+			}
 		}
 		
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -138,7 +141,7 @@ namespace Clipper2Utils
 
 			// convertir current_path en polygone gdstk
 			for (const PointD& point : poly_parent)
-				poly->point_array.append(Vec2{ (double)point.x, (double)point.y });
+				poly->point_array.append(Vec2{ point.x, point.y });
 
 			polys.push_back(poly);
 		}
@@ -327,6 +330,8 @@ namespace Clipper2Utils
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 		std::unique_ptr<PolyTreeD> output = std::make_unique<PolyTreeD>();
 		PathsD paths = PolyTreeToPathsD(*input);
+
+		PathsD p;
 
 		// dégraissement
 		ClipperOffset offsetter;

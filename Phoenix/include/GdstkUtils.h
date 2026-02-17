@@ -50,4 +50,9 @@ namespace GdstkUtils
 
 	// Multiplie les points par "scale"
 	void Scale(Library& lib, double scale);
+
+	float FindMinimum(const Library& lib);
+
+	// Set coordonate positive
+	void Add(Library& lib, float value);
 };
