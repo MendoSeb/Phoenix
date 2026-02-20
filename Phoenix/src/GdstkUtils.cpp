@@ -266,7 +266,7 @@ namespace GdstkUtils
 	}
 
 
-	void MakeFracture(Library& lib)
+	void MakeFracture(Library& lib, uint64_t&& max_points)
 	{
 		Array<gdstk::Polygon*> fractured_polys = {};
 
@@ -277,7 +277,7 @@ namespace GdstkUtils
 				Array<gdstk::Polygon*> fractured = {};
 
 				gdstk::Polygon* poly = lib.cell_array[i]->polygon_array[k];
-				poly->fracture(8190, 1e-3, fractured);
+				poly->fracture(max_points, 1e-3, fractured);
 
 				for (size_t m = 0; m < fractured.count; m++)
 					fractured_polys.append(fractured[m]);

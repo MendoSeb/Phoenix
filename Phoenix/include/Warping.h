@@ -1,131 +1,43 @@
+#pragma once
 #include <opencv2/opencv.hpp>
 #include <gdstk/library.hpp>
 #include "vector_types.h"
+#include <gdstk/gdstk.hpp>
+#include <Eigen/Dense>
+#include "GdstkUtils.h"
+
+
+using namespace gdstk;
 
 
 namespace Warping
 {
-    // Renvoie tous les polygones dont au moins un point est dans la "boite"
-    std::vector<std::vector<cv::Point2f>> FindPolygonesInBox(
-        const Library& lib,
-        std::vector<cv::Point2f>& box_pos
-    );
+    std::vector<earcutPoly> getPolygonsInBox(const Library& lib, const Polygon* box);
 
-    // Applique la matrice de transformation "warp" aux points contenu dans le polygone "src_box"
-    void TransformVerticesInBox(
-        std::pair<std::vector<cv::Point2f>, std::vector<uint3>>& obj,
-        std::vector<cv::Point2f>& src_box,
-        cv::Mat& warp
-    );
+    Eigen::Matrix3d getPerspectiveMatrixTransform(const double2 src[4], const double2 dst[4]);
 
-    // Convertit les polygones avec points OpenCV en polygones de type gdstk
-    Library ConvertOpenCVPolygonesToGdstk(std::vector<std::vector<cv::Point2f>>& polys_in_boxs);
+    void applyMatrixToPolygons(Eigen::Matrix3d& m, std::vector<earcutPoly>& polys);
+
+    // boite représentant la boite cible et sa destination réelle
+    struct Boxes {
+        double2 src[4];
+        double2 dst[4];
+    };
 }
 
 
-static std::vector<std::pair<std::vector<cv::Point2f>, std::vector<cv::Point2f>>> src_dst_boxes =
+static std::vector<Warping::Boxes> src_dst_boxes =
 {
     // 1ere transformation
-    {
-        {cv::Point2f(-600000.0f, 300000.0f),
-        cv::Point2f(-600000.0f, 0.0f),
-        cv::Point2f(-300000.0f, 0.0f),
-        cv::Point2f(-300000.0f, 300000.0f) },
+    Warping::Boxes{
+        double2{0.0, 0.0},
+        double2{0.0, 10.0},
+        double2{10.0, 10.0},
+        double2{10.0, 0.0},
 
-        {cv::Point2f(-540000.0f, 540000.0f),
-        cv::Point2f(-660000.0f, 300000.0f),
-        cv::Point2f(-300000.0f, 0.0f),
-        cv::Point2f(-60000.0f, 360000.0f)}
-    },
-
-    // 2eme transformation
-     {
-        {cv::Point2f(-300000.0f, 300000.0f),
-        cv::Point2f(-300000.0f, 0.0f),
-        cv::Point2f(0.0f, 0.0f),
-        cv::Point2f(0.0f, 300000.0f) },
-
-        {cv::Point2f(60000.0f, 300000.0f),
-        cv::Point2f(120000.0f, 0.0f),
-        cv::Point2f(30000.0f, 0.0f),
-        cv::Point2f(0.0f, 300000.0f) }
-     },
-
-    // 3eme transformation
-    {
-       {cv::Point2f(0.0f, 300000.0f),
-       cv::Point2f(0.0f, 0.0f),
-       cv::Point2f(300000.0f, 0.0f),
-       cv::Point2f(300000.0f, 300000.0f) },
-
-       {cv::Point2f(60000.0f, 0.0f),
-       cv::Point2f(120000.0f, -360000.0f),
-       cv::Point2f(30000.0f, -360000.0f),
-       cv::Point2f(0.0f, -60000.0f) }
-    },
-
-    // 4eme transformation
-    {
-       {cv::Point2f(300000.0f, 300000.0f),
-       cv::Point2f(300000.0f, 0.0f),
-       cv::Point2f(600000.0f, 0.0f),
-       cv::Point2f(600000.0f, 300000.0f) },
-
-       {cv::Point2f(0.0f, -300000.0f),
-       cv::Point2f(-60000.0f, -660000.0f),
-       cv::Point2f(-150000.0f, -660000.0f),
-       cv::Point2f(-240000.0f, -360000.0f) }
-    },
-
-    // 5eme transformation
-    {
-        {cv::Point2f(-600000.0f, 0.0f),
-        cv::Point2f(-600000.0f, -300000.0f),
-        cv::Point2f(-300000.0f, -300000.0f),
-        cv::Point2f(-300000.0f, 0.0f) },
-
-        {cv::Point2f(-120000.0f, 540000.0f),
-        cv::Point2f(-240000.0f, 300000.0f),
-        cv::Point2f(120000.0f, 0.0f),
-        cv::Point2f(360000.0f, 360000.0f)}
-    },
-
-    // 6eme transformation
-     {
-        {cv::Point2f(-300000.0f, 0.0f),
-        cv::Point2f(-300000.0f, -300000.0f),
-        cv::Point2f(0.0f, -300000.0f),
-        cv::Point2f(0.0f, 0.0f) },
-
-        {cv::Point2f(480000.0f, 300000.0f),
-        cv::Point2f(600000.0f, 0.0f),
-        cv::Point2f(450000.0f, 0.0f),
-        cv::Point2f(420000.0f, 300000.0f) }
-     },
-
-    // 7eme transformation
-    {
-       {cv::Point2f(0.0f, 0.0f),
-       cv::Point2f(0.0f, -300000.0f),
-       cv::Point2f(300000.0f, -300000.0f),
-       cv::Point2f(300000.0f, 0.0f) },
-
-       {cv::Point2f(480000.0f, 0.0f),
-       cv::Point2f(600000.0f, -360000.0f),
-       cv::Point2f(450000.0f, -360000.0f),
-       cv::Point2f(420000.0f, -60000.0f) }
-    },
-
-    // 8eme transformation
-    {
-       {cv::Point2f(300000.0f, 0.0f),
-       cv::Point2f(300000.0f, -300000.0f),
-       cv::Point2f(600000.0f, -300000.0f),
-       cv::Point2f(600000.0f, 0.0f) },
-
-       {cv::Point2f(420000.0f, -300000.0f),
-       cv::Point2f(360000.0f, -660000.0f),
-       cv::Point2f(270000.0f, -660000.0f),
-       cv::Point2f(180000.0f, -360000.0f) }
+        double2{3.0, 3.0},
+        double2{3.0, 13.0},
+        double2{13.0, 13.0},
+        double2{13.0, 3.0}
     }
 };

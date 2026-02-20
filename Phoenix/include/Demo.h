@@ -48,4 +48,8 @@ namespace Demo
 	void essaiClient();
 
 	void essaiClientComparison();
+
+	void rasterisationStep();
+
+	void gpu();
 }

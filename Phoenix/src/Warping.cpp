@@ -1,129 +1,74 @@
-#include "warning.h"
-#include <vector>
-#include <clipper2/clipper.core.h>
-#include <opencv2/opencv.hpp>
-#include <gdstk/library.hpp>
-#include <vector_types.h>
+#include "Warping.h"
 
 
-using namespace Clipper2Lib;
 using namespace gdstk;
 
 
-namespace Warping
+
+std::vector<earcutPoly> Warping::getPolygonsInBox(const Library& lib, const Polygon* box)
 {
-    void ThreadPolygonesInBox
-    (
-        int index_max,
-        std::vector<std::vector<cv::Point2f>>& polys_in_box,
-        Cell* cell, 
-        std::vector<cv::Point2f>& src_box
-    )
-    {
-        for (size_t k = 0; k < index_max; k++)
+    std::vector<earcutPoly> polys_in_box;
+
+    for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+        if (box->contain_any(lib.cell_array[0]->polygon_array[i]->point_array))
         {
-            bool pointInBox = false;
+            earcutPoly poly;
+            poly.push_back({});
 
-            // y a t'il au moins un point dans la box
-            for (size_t m = 0; m < cell->polygon_array[k]->point_array.count; m++)
+            for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
             {
-                Vec2 gdstk_point = cell->polygon_array[k]->point_array[m];
-                cv::Point2f point(gdstk_point.x, gdstk_point.y);
-
-                double inside = cv::pointPolygonTest(src_box, point, false);
-
-                if (inside > 0)
-                {
-                    pointInBox = true;
-                    break;
-                }
+                earcutPoint point;
+                point.at(0) = lib.cell_array[0]->polygon_array[i]->point_array[k].x;
+                point.at(1) = lib.cell_array[0]->polygon_array[i]->point_array[k].y;
+                poly[0].push_back(point);
             }
 
-            // inclure tout le polygone si un de ses points est dans la box
-            if (pointInBox)
-            {
-                std::vector<cv::Point2f> poly;
-                poly.resize(cell->polygon_array[k]->point_array.count);
-
-                for (size_t m = 0; m < cell->polygon_array[k]->point_array.count; m++)
-                {
-                    Vec2 gdstk_point = cell->polygon_array[k]->point_array[m];
-                    cv::Point2f point(gdstk_point.x, gdstk_point.y);
-                    poly[m] = std::move(point);
-                }
-
-                polys_in_box.push_back(poly);
-            }
+            polys_in_box.push_back(poly);
         }
+
+    return polys_in_box;
+}
+
+
+Eigen::Matrix3d Warping::getPerspectiveMatrixTransform(const double2 src[4], const double2 dst[4])
+{
+    Eigen::Matrix<double, 8, 8> a;
+    Eigen::Matrix<double, 8, 1> b;
+
+    for (size_t i = 0; i < 4; i++)
+    {
+        a.row(i*2) << src[i].x, src[i].y, 1, 0, 0, 0, -src[i].x * dst[i].x, -src[i].y * dst[i].x;
+        a.row(i*2+1) << 0, 0, 0, src[i].x, src[i].y, 1, -src[i].x * dst[i].y, -src[i].y * dst[i].y;
+
+        b.row(i*2) << dst[i].x;
+        b.row(i*2+1) << dst[i].y;
     }
 
+    Eigen::Matrix<double, 8, 1> x = a.colPivHouseholderQr().solve(b);
 
-    std::vector<std::vector<cv::Point2f>> FindPolygonesInBox
-    (
-        const Library& lib, 
-        std::vector<cv::Point2f>& src_box
-    )
+    Eigen::Matrix3d sol;
+    sol << x(0), x(1), x(2),
+           x(3), x(4), x(5),
+           x(6), x(7), 1;
+
+    return sol;
+}
+
+
+void Warping::applyMatrixToPolygons(Eigen::Matrix3d& m, std::vector<earcutPoly>& polys)
+{
+    for (earcutPoly& p : polys)
     {
-        assert(lib.cell_array.count == 0);
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-        std::vector<std::vector<cv::Point2f>> polys_in_box;
-        Cell* cell = lib.cell_array[0];
-
-        ThreadPolygonesInBox
-        (
-            cell->polygon_array.count,
-            std::ref(polys_in_box),
-            std::ref(cell),
-            std::ref(src_box)
-        );
-
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "FindPolygonesInBox fait en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-        return polys_in_box;
-    }
-
-
-    void TransformVerticesInBox
-    (
-        std::pair<std::vector<cv::Point2f>, std::vector<uint3>>& obj,
-        std::vector<cv::Point2f>& src_box,
-        cv::Mat& warp
-    )
-    {
-        for (int i = 0; i < obj.first.size(); i++)
+        for (earcutPoint& point : p[0])
         {
-            cv::Point2f point(obj.first[i].x, obj.first[i].y);
+            Eigen::Vector3d v;
+            v << point.at(0), point.at(1), 1;
 
-            if (cv::pointPolygonTest(src_box, point, false))
-            {
-                std::vector<cv::Point2f> temp = { point };
-                cv::perspectiveTransform(temp, temp, warp);
-                obj.first[i].x = temp[0].x;
-                obj.first[i].y = temp[0].y;
-            }
+            Eigen::Vector3d res = m * v;
+            res /= res(2); // divise par la coordonnée homogène
+
+            point.at(0) = res(0);
+            point.at(1) = res(1);
         }
-    }
-
-
-    Library ConvertOpenCVPolygonesToGdstk(std::vector<std::vector<cv::Point2f>>& polys_in_boxs)
-    {
-        Library lib = {};
-        lib.init("library", 1e-6, 1e-9);
-
-        Cell* cell = new Cell();
-        cell->name = copy_string("FIRST", NULL);
-        lib.cell_array.append(cell);
-
-        for (std::vector<cv::Point2f>& poly : polys_in_boxs)
-        {
-            Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
-
-            for (cv::Point2f& point : poly)
-                gdstk_poly->point_array.append(Vec2{ point.x, point.y });
-
-            cell->polygon_array.append(gdstk_poly);
-        }
-
-        return lib;
     }
 }

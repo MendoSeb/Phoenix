@@ -28,12 +28,16 @@ int main()
 	//warpingDemo2();
 	//warpingDemo3();
 
-	odbDemo();
+	//odbDemo();
 
 	//video();
 
 	//essaiClient();
 	//essaiClientComparison();
+
+	//rasterisationStep();
+
+	gpu();
 
 	return 0;
 }

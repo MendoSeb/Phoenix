@@ -37,7 +37,7 @@ namespace GdstkUtils
 	void Normalize(Library& lib, Vec2&& real_dim_cm);
 
 	// Divise les polygones ayant plus de 8190 sommets (pour la triangulation et le warning)
-	void MakeFracture(Library& lib);
+	void MakeFracture(Library& lib, uint64_t&& max_points = 8190);
 
 	// Applique l'union aux polygones de type gdstk
 	Library MakeUnion(Library& lib);

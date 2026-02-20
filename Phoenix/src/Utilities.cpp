@@ -86,14 +86,94 @@ namespace Utils
     }
 
 
-    void SplitEarcutPolygons(earcutPolys& polys)
+    earcutLayer earcutTriangulation(const Library& lib)
     {
-        for (earcutPoly& poly : polys)
+        earcutLayer triangulation;
+        uint32_t indices_count = 0;
+
+        // triangulate
+        for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
         {
-            Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
+            // add polygon
+            earcutPoly poly = convertGdstkToEarcutPoly(lib.cell_array[0]->polygon_array[i]);
+            triangulation.first.push_back(poly);
 
+            // add indices (and increment) of poly
+            std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(poly);
 
+            for (uint32_t& index : indices)
+                index += indices_count;
+
+            triangulation.second.push_back(indices);
+            indices_count += poly[0].size();
         }
+
+        return triangulation;
+    }
+
+
+    earcutPoly convertGdstkToEarcutPoly(const Polygon* gdstk_poly)
+    {
+        earcutPoly poly = { {} };
+
+        for (size_t k = 0; k < gdstk_poly->point_array.count; k++)
+        {
+            earcutPoint point{
+               gdstk_poly->point_array[k].x,
+               gdstk_poly->point_array[k].y
+            };
+
+            poly[0].push_back(point);
+        }
+
+        return poly;
+    }
+
+
+    std::pair<std::pair<float2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation)
+    {
+        // count vertices and triangles
+        size_t nb_vertices = 0;
+        size_t nb_triangles = 0;
+
+        for (earcutPoly& poly : triangulation.first)
+            nb_vertices += poly[0].size();
+
+        for (std::vector<uint32_t>& indices : triangulation.second)
+            nb_triangles += indices.size();
+
+        // convert to float2* and uint3*
+        nb_triangles /= 3;
+
+        std::pair<float2*, uint3*> tris;
+        tris.first = new float2[nb_vertices];
+        tris.second = new uint3[nb_triangles];
+
+        size_t vertex_index = 0;
+        size_t triangle_index = 0;
+
+        for (earcutPoly& poly : triangulation.first)
+            for (earcutPoint& point : poly[0])
+            {
+                tris.first[vertex_index].x = point.at(0);
+                tris.first[vertex_index].y = point.at(1);
+                vertex_index++;
+            }
+
+        for (std::vector<uint32_t>& indices : triangulation.second)
+        {
+            for (size_t i = 0; i < indices.size(); i += 3)
+            {
+                tris.second[triangle_index].x = indices[i];
+                tris.second[triangle_index].y = indices[i+1];
+                tris.second[triangle_index].z = indices[i+2];
+
+                triangle_index++;
+            }
+        }
+
+        uint2 count{ nb_vertices, nb_triangles };
+        return { tris, count };
     }
 
 
@@ -146,7 +226,6 @@ namespace Utils
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         std::cout << "WriteLayersObj fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
     }
-
 
     void WriteLibraryToObj(const std::vector<Library>& layers, const char* filename)
     {
@@ -202,6 +281,25 @@ namespace Utils
         file.close();
     }
 
+    void writeObj(const char* file_name, float2* vertices, uint3* triangles, 
+        size_t nb_v, size_t nb_tris)
+    {
+        std::ofstream file(file_name);
+
+        for (size_t i = 0; i < nb_v; i++)
+            file << "v " 
+            << std::to_string(vertices[i].x) << " " 
+            << std::to_string(vertices[i].y) << " 0.0\n";
+
+        for (size_t i = 0; i < nb_tris; i++)
+            file << "f " 
+            << std::to_string(triangles[i].x + 1) << " "
+            << std::to_string(triangles[i].y + 1) << " "
+            << std::to_string(triangles[i].z + 1) << "\n";
+
+        file.close();
+    }
+
     std::pair<std::vector<cv::Point2f>, std::vector<uint3>>  LoadObjVerticesTriangles(const char* filename)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -235,7 +333,6 @@ namespace Utils
         std::cout << "Chargement de l'obj en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
         return { vertices, triangles };
     }
-
 
     std::pair<float3*, uint3*> GetVertexAndTriangles(std::vector<std::vector<cv::Point2f>>& polys)
     {
