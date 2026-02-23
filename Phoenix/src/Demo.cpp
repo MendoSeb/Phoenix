@@ -577,24 +577,30 @@ void Demo::rasterisationStep()
 
 void Demo::gpu()
 {
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
 	GdstkUtils::MakeFracture(lib, 1000); // triangulation passe de 9s à 0.5s
+	
+	float scale = 38400;
+	GdstkUtils::normalize01(lib, scale);
 	//GdstkUtils::SaveToGdsii(lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/test.gds", false);
 
 	earcutLayer triangulation = Utils::earcutTriangulation(lib);
-	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
+	std::pair<std::pair<uint2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
+	Utils::correctTriangulation(tris);
 
 	CudaCall::warping(tris, src_dst_boxes);
+	CudaCall::rasterization(tris, scale);
 
-	Utils::writeObj(
+	// pour phoenix
+	/*Utils::writeObj(
 		"C:/Users/PC/Desktop/poc/test.obj",
 		tris.first.first, 
 		tris.first.second, 
 		tris.second.x,
 		tris.second.y
-	);
+	);*/
 
-	delete tris.first.first;
-	delete tris.first.second;
+	cudaFreeHost(tris.first.first);
+	cudaFreeHost(tris.first.second);
 }

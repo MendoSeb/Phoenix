@@ -31,13 +31,13 @@ static std::vector<Warping::Boxes> src_dst_boxes =
     // 1ere transformation
     Warping::Boxes{
         double2{0.0, 0.0},
-        double2{0.0, 10.0},
-        double2{10.0, 10.0},
-        double2{10.0, 0.0},
+        double2{0.0, 20000.0},
+        double2{20000.0, 20000.0},
+        double2{20000.0, 0.0},
 
-        double2{3.0, 3.0},
-        double2{3.0, 13.0},
-        double2{13.0, 13.0},
-        double2{13.0, 3.0}
+        double2{1000.0, 500.0},
+        double2{300.0, 10000.0},
+        double2{15000.0, 15000.0},
+        double2{18000.0, 1000.0}
     }
 };

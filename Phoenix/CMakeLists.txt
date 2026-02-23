@@ -12,6 +12,7 @@ find_package(Qhull REQUIRED)
 find_package(CUDAToolkit 12.4 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(TIFF REQUIRED)
 
 # --- Configuration des chemins OptiX ---
 set(OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0")
@@ -26,8 +27,7 @@ file(GLOB_RECURSE CLIPPER1_SOURCES "clipper1/cpp/*.cpp")
 set(OPTIX_SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/Phoenix.cu")
 set(OPTIX_OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/Phoenix.optixir")
 
-set(cudatest "${CMAKE_CURRENT_SOURCE_DIR}/src/vertexInTric.cu")
-
+set(cuda_utils "${CMAKE_CURRENT_SOURCE_DIR}/src/cudaUtils.cu")
 
 # --- Compilation du fichier .cu en .optixir avec NVCC ---
 add_custom_command(
@@ -59,7 +59,7 @@ add_executable(executable
     ${GDSTK_SOURCES} 
     ${CLIPPER1_SOURCES}
     "${OPTIX_SOURCE_FILE}"
-    ${cudatest}
+    ${cuda_utils}
 )
 
 add_dependencies(executable GenerateOptiXIR)
@@ -82,6 +82,7 @@ target_link_libraries(executable PRIVATE
     CUDA::cudart
     CUDA::cuda_driver
     Eigen3::Eigen
+    TIFF::TIFF
     ${OpenCV_LIBS}
 )
 

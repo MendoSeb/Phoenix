@@ -266,6 +266,31 @@ namespace GdstkUtils
 	}
 
 
+	void normalize01(Library& lib, float scale)
+	{
+		double min = DBL_MAX;
+		double max = DBL_MIN;
+
+		// find minimum and maximum coordinate
+		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+			{
+				Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
+				min = std::min(min, std::min(p.x, p.y));
+				max = std::max(max, std::max(p.x, p.y));
+			}
+
+		// normalize
+		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
+			{
+				Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
+				p.x = ((std::abs(min) + p.x) / (std::abs(min) + max)) * scale;
+				p.y = ((std::abs(min) + p.y) / (std::abs(min) + max)) * scale;
+			}
+	}
+
+
 	void MakeFracture(Library& lib, uint64_t&& max_points)
 	{
 		Array<gdstk::Polygon*> fractured_polys = {};
@@ -290,6 +315,8 @@ namespace GdstkUtils
 		lib.cell_array.append(cell);
 
 		cell->polygon_array = fractured_polys;
+
+		printf("fracture des triangles faite\n");
 	}
 
 

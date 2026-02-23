@@ -1,5 +1,4 @@
 #include "Optix.h"
-#include <optix.h>
 #include <optix_function_table_definition.h>
 #include <optix_stack_size.h>
 #include <optix_stubs.h>
@@ -401,7 +400,7 @@ void Optix::render()
 	cudaDeviceSynchronize();
 	cudaFree(reinterpret_cast<void*>(d_param));
 
-	saveGrayscaleBitmapCuda("output.bmp", width, height, output_buffer_d, stream);
+	saveGrayscaleBitmapCuda("output.bmp", width, height, output_buffer_d);
 }
 
 
@@ -502,7 +501,7 @@ void Optix::DMDSimulation()
 
 	cudaDeviceSynchronize();
 	cudaFree(reinterpret_cast<void*>(d_param));
-	saveGrayscaleBitmapCuda("output.bmp", img_width, img_height, output_buffer_d, stream);
+	saveGrayscaleBitmapCuda("output.bmp", img_width, img_height, output_buffer_d);
 }
 
 
@@ -603,7 +602,7 @@ void Optix::DMDSimulationV2()
 							cudaMemcpyDeviceToHost, stream[previous_buff]);
 
 						//saveGrayscaleBitmapCuda(("results/output" + std::to_string(cpt) + ".bmp").c_str(), 
-						//	width, height, host_img[previous_buff], stream[previous_buff]);
+						//	width, height, host_img[previous_buff]);
 
 						for (int l = 0; l < 2; l++)
 						{
@@ -636,13 +635,13 @@ void Optix::DMDSimulationV2()
 }
 
 
-void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* hostData, CUstream& stream) {
+void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* hostData) {
 
-	for (int i = 0; i < width * height; i++)
+	/*for (int i = 0; i < width * height; i++)
 	{
 		if (hostData[i] > 0)
 			hostData[i] = 80 + rand() % 176;
-	}
+	}*/
 
 	// Check for CUDA errors
 	cudaError_t err = cudaGetLastError();

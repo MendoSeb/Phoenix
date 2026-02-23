@@ -235,5 +235,6 @@ public:
     void DMDSimulationV2();
 
     /* Sauvegarde l'image en .bmp */
-    void saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* img, CUstream& stream);
+    void saveGrayscaleBitmapCuda(const std::string& filename, int width, 
+        int height, unsigned char* img);
 };
