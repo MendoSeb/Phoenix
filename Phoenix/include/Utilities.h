@@ -24,13 +24,13 @@ namespace Utils
 
     earcutLayer earcutTriangulation(const Library& lib);
 
-    bool isTriangleClockwise(double2 tri[3]);
+    bool isTriangleClockwise(int2 tri[3]);
     
-    void correctTriangulation(std::pair<std::pair<uint2*, uint3*>, uint2>& tris);
+    void correctTriangulation(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
 
     earcutPoly convertGdstkToEarcutPoly(const Polygon* poly);
 
-    std::pair<std::pair<uint2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation);
+    std::pair<std::pair<float2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation);
 
     /* Sauvegarde des séries de liste de polygones de type earcut en .obj */
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename);
@@ -38,7 +38,7 @@ namespace Utils
     /* Sauvegarde des séries de liste de polygones de type gdstk en .obj */
     void WriteLibraryToObj(const std::vector<Library>& layers, const char* filename);
 
-    void writeObj(const char* file_name, uint2* vertices, uint3* triangles, 
+    void writeObj(const char* file_name, float2* vertices, uint3* triangles, 
         size_t nb_v, size_t nb_tris);
 
     /* Récupère les sommets et triangles à partir d'une liste de polygones OpenCV */

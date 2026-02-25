@@ -266,7 +266,7 @@ namespace GdstkUtils
 	}
 
 
-	void normalize01(Library& lib, float scale)
+	void normalize01(Library& lib, double& scale)
 	{
 		double min = DBL_MAX;
 		double max = DBL_MIN;
@@ -293,6 +293,8 @@ namespace GdstkUtils
 
 	void MakeFracture(Library& lib, uint64_t&& max_points)
 	{
+		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
 		Array<gdstk::Polygon*> fractured_polys = {};
 
 		for (size_t i = 0; i < lib.cell_array.count; i++)
@@ -316,7 +318,9 @@ namespace GdstkUtils
 
 		cell->polygon_array = fractured_polys;
 
-		printf("fracture des triangles faite\n");
+		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+		std::cout << "fracture des plygones en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+
 	}
 
 

@@ -86,27 +86,57 @@ namespace Utils
 
     earcutLayer earcutTriangulation(const Library& lib)
     {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        const uint NB_THREADS = 10;
+        std::thread threads[NB_THREADS];
+
+        size_t nb_polys = lib.cell_array[0]->polygon_array.count;
+        size_t nb_polys_per_thread = nb_polys / NB_THREADS;
+
         earcutLayer triangulation;
-        uint32_t indices_count = 0;
+        triangulation.first.resize(nb_polys);
+        triangulation.second.resize(nb_polys);
 
-        // triangulate
-        for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
+        auto lambda = [&](size_t min_index, size_t max_index)
         {
-            // add polygon
-            earcutPoly poly = convertGdstkToEarcutPoly(lib.cell_array[0]->polygon_array[i]);
-            triangulation.first.push_back(poly);
+            // count vertex_number until the min_index polygon
+            size_t indices_count = 0;
 
-            // add indices (and increment) of poly
-            std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(poly);
+            for (size_t i = 0; i < min_index; i++)
+                indices_count += lib.cell_array[0]->polygon_array[i]->point_array.count;
 
-            for (uint32_t& index : indices)
-                index += indices_count;
+            for (size_t i = min_index; i < max_index; i++)
+            {
+                earcutPoly poly = convertGdstkToEarcutPoly(lib.cell_array[0]->polygon_array[i]);
+                std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(poly);
 
-            triangulation.second.push_back(indices);
-            indices_count += poly[0].size();
+                for (uint32_t& index : indices)
+                    index += indices_count;
+
+                indices_count += poly[0].size();
+                triangulation.first[i] = std::move(poly);
+                triangulation.second[i] = std::move(indices);
+            }
+        };
+
+        for (size_t i = 0; i < NB_THREADS; i++)
+        {
+            size_t min_index = i * nb_polys_per_thread;
+            size_t max_index = (i + 1) * nb_polys_per_thread;
+
+            if (i == NB_THREADS - 1)
+                max_index = nb_polys;
+
+            threads[i] = std::thread(lambda, min_index, max_index);
         }
 
-        printf("triangulation earcut faite\n");
+        for (size_t i = 0; i < NB_THREADS; i++)
+            threads[i].join();
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "triangulation earcut en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+
         return triangulation;
     }
 
@@ -127,7 +157,7 @@ namespace Utils
         return poly;
     }
 
-    std::pair<std::pair<uint2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation)
+    std::pair<std::pair<float2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation)
     {
         // count vertices and triangles
         size_t nb_vertices = 0;
@@ -142,8 +172,8 @@ namespace Utils
         // convert to float2* and uint3*
         nb_triangles /= 3;
 
-        std::pair<uint2*, uint3*> tris;
-        cudaMallocHost((void**)&tris.first, nb_vertices * sizeof(uint2));
+        std::pair<float2*, uint3*> tris;
+        cudaMallocHost((void**)&tris.first, nb_vertices * sizeof(float2));
         cudaMallocHost((void**)&tris.second, nb_triangles * sizeof(uint3));
 
         size_t vertex_index = 0;
@@ -152,8 +182,8 @@ namespace Utils
         for (earcutPoly& poly : triangulation.first)
             for (earcutPoint& point : poly[0])
             {
-                tris.first[vertex_index].x = (uint)point.at(0);
-                tris.first[vertex_index].y = (uint)point.at(1);
+                tris.first[vertex_index].x = point.at(0);
+                tris.first[vertex_index].y = point.at(1);
                 vertex_index++;
             }
 
@@ -175,22 +205,22 @@ namespace Utils
         return { tris, count };
     }
 
-    bool isTriangleClockwise(double2 tri[3])
+    bool isTriangleClockwise(int2 tri[3])
     {
-        double2 vec1 { tri[1].x - tri[0].x, tri[1].y - tri[0].y };
-        double2 vec2 { tri[2].x - tri[0].x, tri[2].y - tri[0].y };
+        int2 vec1 { tri[1].x - tri[0].x, tri[1].y - tri[0].y };
+        int2 vec2 { tri[2].x - tri[0].x, tri[2].y - tri[0].y };
 
         return vec1.x * vec2.y - vec1.y * vec2.x < 0;
     }
 
-    void correctTriangulation(std::pair<std::pair<uint2*, uint3*>, uint2>& tris)
+    void correctTriangulation(std::pair<std::pair<float2*, uint3*>, uint2>& tris)
     {
         for (size_t i = 0; i < tris.second.y; i++)
         {
-           double2 tri[3] = {
-               {(double)tris.first.first[tris.first.second[i].x].x, (double)tris.first.first[tris.first.second[i].x].y},
-               {(double)tris.first.first[tris.first.second[i].y].x, (double)tris.first.first[tris.first.second[i].y].y},
-               {(double)tris.first.first[tris.first.second[i].z].x, (double)tris.first.first[tris.first.second[i].z].y}
+           int2 tri[3] = {
+               {tris.first.first[tris.first.second[i].x].x, tris.first.first[tris.first.second[i].x].y},
+               {tris.first.first[tris.first.second[i].y].x, tris.first.first[tris.first.second[i].y].y},
+               {tris.first.first[tris.first.second[i].z].x, tris.first.first[tris.first.second[i].z].y}
             };
 
             if (!isTriangleClockwise(tri))
@@ -308,7 +338,7 @@ namespace Utils
         file.close();
     }
 
-    void writeObj(const char* file_name, uint2* vertices, uint3* triangles, 
+    void writeObj(const char* file_name, float2* vertices, uint3* triangles, 
         size_t nb_v, size_t nb_tris)
     {
         std::ofstream file(file_name);

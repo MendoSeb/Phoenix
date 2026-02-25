@@ -30,7 +30,7 @@ std::vector<earcutPoly> Warping::getPolygonsInBox(const Library& lib, const Poly
 }
 
 
-Eigen::Matrix3d Warping::getPerspectiveMatrixTransform(const double2 src[4], const double2 dst[4])
+Eigen::Matrix3d Warping::getPerspectiveMatrixTransform(const float2 src[4], const float2 dst[4])
 {
     Eigen::Matrix<double, 8, 8> a;
     Eigen::Matrix<double, 8, 1> b;

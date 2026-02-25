@@ -36,7 +36,7 @@ namespace GdstkUtils
 	// fichiers .gds ne sont pas forcément représentés pareil( primaire: entre -10 et 10, solder: entre -300000 et 30000)
 	void Normalize(Library& lib, Vec2&& real_dim_cm);
 
-	void normalize01(Library& lib, float scale);
+	void normalize01(Library& lib, double& scale);
 
 	// Divise les polygones ayant plus de 8190 sommets (pour la triangulation et le warning)
 	void MakeFracture(Library& lib, uint64_t&& max_points = 8190);
