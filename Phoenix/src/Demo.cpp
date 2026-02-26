@@ -577,26 +577,57 @@ void Demo::rasterisationStep()
 
 void Demo::gpu()
 {
+	using namespace CudaCall;
+
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
 	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test2.gds");
 
-	double scale = 1000.0f * 4.0f;
+	double scale = 5000.0f;
 	GdstkUtils::normalize01(lib, scale);
 
 	earcutLayer triangulation = Utils::earcutTriangulation(lib);
 	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
 	Utils::correctTriangulation(tris);
 
-	//CudaCall::warping(tris, src_dst_boxes);
+	//warping(tris, src_dst_boxes);
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-	CudaCall::bvhV1(tris);
+	//for (uint i = 0; i < tris.second.x; i++)
+	//	std::cout << "apres vertex: " << tris.first.first[i].x << ", " << tris.first.first[i].y << std::endl;
+
+	uint depth = 1;
+	std::pair<BVHNode*, int*> bvh = bvhV1(tris, depth);
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	std::cout << "bvh fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 	
-	CudaCall::rasterization(tris);
+	rasterization(tris, bvh, depth);
+
+	// récupérer les triangles des feuilles pour les imprimer
+	for (uint i = 0; i < 4; i++)
+	{
+		BVHNode* child = &bvh.first[bvh.first->childs[i]];
+		uint3* triangles = new uint3[child->count];
+
+		for (uint k = 0; k < child->count; k++)
+		{
+			uint tri_index = bvh.second[child->offset + k];
+
+			if (tri_index != -1)
+				triangles[k] = tris.first.second[tri_index];
+		}
+
+		Utils::writeObj(
+			("C:/Users/PC/Desktop/poc/test" + std::to_string(i) + ".obj").c_str(),
+			tris.first.first,
+			triangles,
+			tris.second.x,
+			child->count
+		);
+	}
+
 
 	// pour phoenix
 	Utils::writeObj(

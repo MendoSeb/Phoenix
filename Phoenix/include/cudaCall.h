@@ -34,12 +34,14 @@ namespace CudaCall
 
 	struct BVHNode
 	{
+		int id = -1;
+
 		float2 min_pos { FLT_MAX, FLT_MAX };
 		float2 max_pos { FLT_MIN, FLT_MIN };
 
-		uint offset = 0;
-		uint count = 0;
-		BVHNode* childs[4] = { nullptr };
+		int offset = 0;
+		int count = 0;
+		int childs[4] = { -1, -1, -1, -1 };
 
 		bool isLeaf = false;
 	};
@@ -50,16 +52,13 @@ namespace CudaCall
 		std::vector<Warping::Boxes>& src_dst
 	);
 
-	void rasterization(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
-
-	void bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
-
-	bool isVertexInTriangleBVH(
-		std::pair<std::pair<float2*, uint3*>, uint2>& tris, 
-		int* all_indices,
-		BVHNode* parent,
-		const float2& pixel
+	void rasterization(
+		std::pair<std::pair<float2*, uint3*>, uint2>& tris,
+		std::pair<BVHNode*, int*>& bvh,
+		uint& depth
 	);
+
+	std::pair<BVHNode*, int*> bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris, uint& depth);
 
 	void saveToBmp(const std::string& filename, int width, int height,
 		unsigned char* hostData);

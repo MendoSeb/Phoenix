@@ -107,11 +107,67 @@ __device__ float4 getTriangleBoundingBox(float2 tri[3])
 	return min_max;
 }
 
+__device__ bool isVertexInTriangleBVH(
+	float2* d_vertices,
+	uint3* d_triangles,
+	BVHNode* dtree,
+	int* d_all_indices,
+	uint depth,
+	uint nb_triangles,
+	float2& pixel
+)
+{
+	BVHNode* current_node = &dtree[0];
+	int nb_leafs = std::pow(4, depth);
+
+	for (uint p = 0; p < depth; p++)
+	{
+		for (uint i = 0; i < 4; i++)
+		{
+			BVHNode* child = &dtree[current_node->childs[i]];
+
+			if (pixel.x >= child->min_pos.x && pixel.x <= child->max_pos.x // pixel dans la boite englobante
+				&& pixel.y >= child->min_pos.y && pixel.y <= child->max_pos.y)
+			{
+				if (child->isLeaf)
+				{
+					for (int k = 0; k < child->count; k++)
+					{
+						int tri_index = d_all_indices[child->offset + k];
+
+						if (tri_index >= 0 && tri_index < nb_triangles * nb_leafs)
+						{
+							float2 tri[3] = {
+								d_vertices[d_triangles[tri_index].x],
+								d_vertices[d_triangles[tri_index].y],
+								d_vertices[d_triangles[tri_index].z]
+							};
+
+							if (checkPointInTriangleFast(pixel, tri))
+								return true;
+						}
+					}
+				}
+				else
+				{
+					current_node = child;
+					break;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 
 __global__ void rasterization_kernel(
-	float2* vertices,
-	uint3* triangles,
+	float2* d_vertices,
+	uint3* d_triangles,
+	BVHNode* dtree,
+	int* d_all_indices,
 	size_t nb_triangles,
+	uint depth,
 	uint2 img_dim,
 	unsigned char* img
 )
@@ -120,114 +176,37 @@ __global__ void rasterization_kernel(
 	size_t thread_y = blockIdx.y * blockDim.y + threadIdx.y;
 	size_t pixel_index = thread_y * img_dim.x + thread_x;
 
-	unsigned char val = 255;
-
 	if (pixel_index < img_dim.x * img_dim.y)
 	{
-		for (size_t i = 0; i < nb_triangles; i++)
-		{
-			float2 tri[3] = {
-				vertices[triangles[i].x],
-				vertices[triangles[i].y],
-				vertices[triangles[i].z],
-			};
+		float2 pixel{ thread_x, thread_y };
 
-			float4 min_max = getTriangleBoundingBox(tri);
-			float2 pixel{ thread_x, thread_y };
-
-			if ( checkPointInTriangleFast(pixel, tri) )
-			{
-				val = 0;
-				break;
-			}
-		}
-
-		img[pixel_index] = val;
+		if (isVertexInTriangleBVH(d_vertices, d_triangles, dtree, d_all_indices, depth, nb_triangles, pixel))
+			img[pixel_index] = 255;
 	}
 }
 
 
 __device__ bool isTriangleInBoundingBox(float2 triangle[3], const float2& min_pos, const float2& max_pos)
 {
-	return (triangle[0].x >= min_pos.x && triangle[0].x <= max_pos.x
-		&& triangle[0].y >= min_pos.y && triangle[0].y <= max_pos.y)
-		|| (triangle[1].x >= min_pos.x && triangle[1].x <= max_pos.x
-			&& triangle[1].y >= min_pos.y && triangle[1].y <= max_pos.y)
-		|| (triangle[2].x >= min_pos.x && triangle[2].x <= max_pos.x
-			&& triangle[2].y >= min_pos.y && triangle[2].y <= max_pos.y);
-}
+	// au moins un sommet du triangle dans la boite
+	for (uint i = 0; i < 3; i++)
+		if (triangle[i].x >= min_pos.x && triangle[i].x <= max_pos.x
+			&& triangle[i].y >= min_pos.y && triangle[i].y <= max_pos.y)
+			return true;
 
+	// ou au moins un sommet de la boite dans le triangle
+	float2 box_vertices[4] = {
+		{min_pos.x, min_pos.y},
+		{max_pos.x, min_pos.y},
+		{min_pos.x, max_pos.y},
+		{max_pos.x, max_pos.y}
+	};
 
-__global__ void bvhKernel(
-	CudaCall::BVHNode* nodes,
-	float2* d_vertices,
-	uint3* d_triangles,
-	uint* d_all_indices,
-	uint* indices_counter,
-	uint parent_index,
-	uint depth,
-	uint nb_nodes_done
-)
-{
-	uint parent_offset = nodes[0].offset;
-	uint parent_count = nodes[0].count;
+	for (uint i = 0; i < 4; i++)
+		if (checkPointInTriangleFast(box_vertices[i], triangle))
+			return true;
 
-	float half_width = (nodes[parent_index].max_pos.x - nodes[parent_index].min_pos.x) / 2.0f;
-	float half_height = (nodes[parent_index].max_pos.y - nodes[parent_index].min_pos.y) / 2.0f;
-
-	// enfant 1
-	for (uint x = 0; x < 2; x++)
-		for (uint y = 0; y < 2; y++)
-		{
-			uint node_id = nb_nodes_done + threadIdx.x;
-			BVHNode* child = &nodes[node_id];
-
-			// compter le nombre de triangles qui sont dans la boite englobante de cet enfant
-			for (uint i = 0; i < parent_count; i++) // pour chaque indice de triangle
-			{
-				uint tri_index = d_all_indices[parent_offset + i];
-
-				float2 tri[3] = {
-					d_vertices[d_triangles[tri_index].x],
-					d_vertices[d_triangles[tri_index].y],
-					d_vertices[d_triangles[tri_index].z]
-				};
-
-				child->min_pos.x = nodes[parent_index].min_pos.x + i * half_width;
-				child->min_pos.y = nodes[parent_index].min_pos.y + i * half_height;
-				child->max_pos.x = nodes[parent_index].min_pos.x + (i + 1) * half_width;
-				child->max_pos.y = nodes[parent_index].min_pos.y + (i + 1) * half_height;
-
-				if (isTriangleInBoundingBox(tri, child->min_pos, child->max_pos))
-					child->count++;
-			}
-
-			printf("%i child: %f, %f, %f, %f\n", depth, child->min_pos.x, child->min_pos.y, child->max_pos.x, child->max_pos.y);
-
-			// ajouter count à indices_counter et renvoie indices_counter avant l'addition
-			child->offset = atomicAdd(indices_counter, child->count);
-			uint current_nb_child_tri = 0;
-
-			// ajouter dans all_indices les index des triangles qui tombent dans cet enfant
-			for (uint i = 0; i < parent_count; i++) // pour chaque indice de triangle
-			{
-				uint tri_index = d_all_indices[parent_offset + i];
-
-				float2 tri[3] = {
-					d_vertices[d_triangles[tri_index].x],
-					d_vertices[d_triangles[tri_index].y],
-					d_vertices[d_triangles[tri_index].z]
-				};
-
-				BVHNode* child = &nodes[node_id];
-
-				if (isTriangleInBoundingBox(tri, child->min_pos, child->max_pos))
-				{
-					d_all_indices[child->offset + current_nb_child_tri] = tri_index;
-					current_nb_child_tri++;
-				}
-			}
-		}
+	return false;
 }
 
 
@@ -240,22 +219,31 @@ __global__ void bvhKernelV1(
 	uint nb_leafs
 )
 {
-	uint tri_id = blockIdx.x * blockDim.x + threadIdx.x;
+	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-	float2 tri[3] = {
-		d_vertices[d_triangles[tri_id].x],
-		d_vertices[d_triangles[tri_id].y],
-		d_vertices[d_triangles[tri_id].z]
-	};
-
-	for (uint i = 0; i < nb_leafs; i++)
+	if (tri_id >= 0 && tri_id < nb_triangles)
 	{
-		BVHNode* leaf = &dleafs[i];
+		float2 tri[3] = {
+			d_vertices[d_triangles[tri_id].x],
+			d_vertices[d_triangles[tri_id].y],
+			d_vertices[d_triangles[tri_id].z]
+		};
 
-		if (isTriangleInBoundingBox(tri, leaf->min_pos, leaf->max_pos))
+		for (uint i = 0; i < nb_leafs; i++)
 		{
-			d_all_indices[leaf->offset + tri_id] = tri_id;
-			leaf->count++;
+			/*printf("node: %i, boite: %f, %f, %f, %f\ntriangle: %f, %f, %f, %f, %f, %f\n\n",
+				i,
+				dleafs[i].min_pos.x, dleafs[i].max_pos.x, dleafs[i].min_pos.y, dleafs[i].max_pos.y,
+				tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);*/
+
+			if (isTriangleInBoundingBox(tri, dleafs[i].min_pos, dleafs[i].max_pos))
+			{
+				if (dleafs[i].offset + tri_id < nb_leafs * nb_triangles)
+				{
+					d_all_indices[dleafs[i].offset + tri_id] = tri_id;
+					atomicAdd(&dleafs[i].count, 1);
+				}
+			}
 		}
 	}
 }
@@ -323,20 +311,35 @@ void CudaCall::warping
 
 
 void CudaCall::rasterization(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris)
+	std::pair<std::pair<float2*, uint3*>, uint2>& tris,
+	std::pair<BVHNode*, int*>& bvh,
+	uint& depth
+)
 {
-	uint2 img_dim = { 1000, 1000 };
-	size_t nb_pixels = img_dim.x * img_dim.y;
+	uint nb_nodes = (std::pow(4, depth + 1) - 1) / 3;
+	uint nb_leafs = std::pow(4, depth);
 
 	// allocation mémoire
+	cudaStream_t stream;
+	cudaStreamCreate(&stream);
+
+	int* d_all_indices = nullptr;
+	cudaMallocAsync((void**)&d_all_indices, nb_leafs * tris.second.y * sizeof(int), stream);
+	cudaMemcpyAsync(d_all_indices, bvh.second, nb_leafs * tris.second.y * sizeof(int), cudaMemcpyHostToDevice, stream);
+
+	BVHNode* dtree = nullptr;
+	cudaMallocAsync((void**)&dtree, nb_nodes * sizeof(CudaCall::BVHNode), stream);
+	cudaMemcpyAsync(dtree, bvh.first, nb_nodes * sizeof(CudaCall::BVHNode), cudaMemcpyHostToDevice, stream);
+
+	uint2 img_dim = { 5000, 5000 };
+	size_t nb_pixels = img_dim.x * img_dim.y;
+
+	// sommets et triangles
 	float2* dv = nullptr;
 	uint3* dt = nullptr;
 	unsigned char* dimg = nullptr;
 
 	std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
-
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
 
 	cudaMallocAsync((void**)&dv, sizeof(float2) * tris.second.x, stream);
 	cudaMallocAsync((void**)&dt, sizeof(uint3) * tris.second.y, stream);
@@ -345,7 +348,7 @@ void CudaCall::rasterization(
 	cudaMemcpyAsync(dv, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice, stream);
 	cudaMemcpyAsync(dt, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice, stream);
 
-	cudaMemsetAsync(dimg, 255, sizeof(unsigned char) * nb_pixels, stream);
+	cudaMemsetAsync(dimg, 0, sizeof(unsigned char) * nb_pixels, stream);
 
 	std::chrono::steady_clock::time_point s2 = std::chrono::steady_clock::now();
 	std::cout << "allocation vram en " << std::chrono::duration_cast<std::chrono::milliseconds>(s2 - s1).count() << " ms" << std::endl;
@@ -353,7 +356,16 @@ void CudaCall::rasterization(
 	// call
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-	rasterization_kernel <<<dim3(img_dim.x / 16, img_dim.y / 16, 1), dim3(16, 16, 1) >> >(dv, dt, tris.second.y, img_dim, dimg);
+	uint nb_x_blocks = std::ceil((float)img_dim.x / 16.0f);
+	uint nb_y_blocks = std::ceil((float)img_dim.y / 16.0f);
+
+	rasterization_kernel <<< dim3(nb_x_blocks, nb_y_blocks, 1), dim3(16, 16, 1) >>>
+		(dv, dt, dtree, d_all_indices, tris.second.y, depth, img_dim, dimg);
+	
+	/*rasterization_kernel <<<dim3(1, 1, 1), dim3(1, 1, 1) >> >
+		(dv, dt, dtree, d_all_indices, tris.second.y, depth, img_dim, dimg);*/
+	
+	cudaDeviceSynchronize();
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	std::cout << "Rasterisation en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
@@ -361,6 +373,7 @@ void CudaCall::rasterization(
 	std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
 	unsigned char* img = new unsigned char[nb_pixels];
 	cudaMemcpyAsync(img, dimg, nb_pixels * sizeof(unsigned char), cudaMemcpyDeviceToHost, stream);
+	cudaDeviceSynchronize();
 	std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
 	std::cout << "copie de l'image gpu -> cpu " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
 
@@ -380,19 +393,28 @@ void CudaCall::rasterization(
 	delete img;
 }
 
-void CudaCall::bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris)
+std::pair<BVHNode*, int*> CudaCall::bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris, uint& depth)
 {
-	uint depth = 2;
+	uint nb_nodes = (std::pow(4, depth + 1) - 1) / 3;
 	uint nb_leafs = std::pow(4, depth);
 	uint nb_indices_max = nb_leafs * tris.second.y;
 
+	printf("NB leafs: %i\nNB nodes: %i\nNB triangles: %i\n", nb_leafs, nb_nodes, tris.second.y);
+
 	/// construire l'arbre équilibré (équilibré je crois)
 	std::vector<BVHNode*> leafs;
-	//leafs.resize(nb_leafs);
+	uint current_node_index = 0;
 
-	auto lambda = [&](auto&& lambda, std::vector<BVHNode*>& leafs, BVHNode* parent, uint depth)
+	BVHNode *tree = nullptr, *dtree = nullptr;
+	cudaMallocHost((void**)&tree, nb_nodes * sizeof(BVHNode));
+
+	tree[0].min_pos = { 0, 0 };
+	tree[0].max_pos = { 5000, 5000 };
+
+	// fonction récursive pour construire l'arbre
+	auto lambda = [&](auto&& lambda, BVHNode* parent, uint current_depth)
 	{
-		if (depth == 0)
+		if (current_depth == depth)
 			return;
 
 		float half_width = (parent->max_pos.x - parent->min_pos.x) / 2.0f;
@@ -408,36 +430,37 @@ void CudaCall::bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris)
 				child->max_pos.x = parent->min_pos.x + (x + 1) * half_width;
 				child->max_pos.y = parent->min_pos.y + (y + 1) * half_height;
 
-				parent->childs[current_child_index] = child;
+				current_node_index++;
+				child->id = current_node_index;
+				parent->childs[current_child_index] = current_node_index;
+				tree[current_node_index] = *child;
 
-				if (depth - 1 == 0)
+				if (current_depth + 1 == depth)
 				{
 					child->isLeaf = true;
 					child->offset = leafs.size() * tris.second.y;
 					leafs.push_back(child);
 				}
-					
-				lambda(lambda, leafs, child, depth - 1);
+
+				printf("node id: %i, (%f, %f, %f, %f)\n",
+					current_node_index, child->min_pos.x, child->max_pos.x, child->min_pos.y, child->max_pos.y);
+
+				lambda(lambda, child, current_depth + 1);
 				current_child_index++;
 			}
 	};
 
-	BVHNode* root = new BVHNode();
-	root->min_pos = { 0, 0 };
-	root->max_pos = { 5000, 5000 };
-	lambda(lambda, leafs, root, depth);
-
-	printf("nb leafs: %i\n", leafs.size());
-	printf("nb triangles: %i\n", tris.second.y);
+	lambda(lambda, tree, 0);
 
 	/// affecter les triangles aux feuilles
 	// mémoire des indices des triangles des feuilles
-	int* d_all_indices;
+	int* d_all_indices = nullptr;
 	cudaMalloc((void**)&d_all_indices, nb_leafs * tris.second.y * sizeof(int));
 	cudaMemset(d_all_indices, -1, nb_leafs * tris.second.y * sizeof(int));
 
 	// mémoire des feuilles
-	BVHNode* hleafs, *dleafs;
+	BVHNode *hleafs = nullptr;
+	BVHNode *dleafs = nullptr;
 	cudaMallocHost((void**)&hleafs, nb_leafs * sizeof(BVHNode));
 
 	for (uint i = 0; i < nb_leafs; i++)
@@ -455,68 +478,35 @@ void CudaCall::bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris)
 	cudaMemcpy(d_vertices, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_triangles, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice);
 
-	uint nb_blocks = std::ceil((float)tris.second.y / 256); // un thread par triangle
+	uint nb_blocks = std::ceil((float)tris.second.y / 256.0f); // un thread par triangle
 	bvhKernelV1 <<<nb_blocks, 256>>> (dleafs, d_all_indices, d_vertices, d_triangles, tris.second.y, nb_leafs);
+	//bvhKernelV1 <<<1, 1>>> (dleafs, d_all_indices, d_vertices, d_triangles, tris.second.y, nb_leafs);
 	cudaDeviceSynchronize();
 
-	//// copie des données vers le cpu
-	int* h_all_indices = new int[nb_leafs * tris.second.y];
-	cudaMemcpy(h_all_indices, d_all_indices, nb_leafs * tris.second.y * sizeof(int), cudaMemcpyDeviceToHost);
+	//// copie des feuilles modifiées vers le cpu
 	cudaMemcpy(hleafs, dleafs, nb_leafs * sizeof(BVHNode), cudaMemcpyDeviceToHost);
 
+	for (uint i = 0; i < nb_leafs; i++)
+		tree[hleafs[i].id] = hleafs[i];
+
+	int* h_all_indices = nullptr;
+	cudaMallocHost((void**)&h_all_indices, nb_leafs * tris.second.y * sizeof(int));
+	cudaMemcpy(h_all_indices, d_all_indices, nb_leafs * tris.second.y * sizeof(int), cudaMemcpyDeviceToHost);
+
+	for (uint i = 0; i < nb_leafs; i++)
+		for (uint k = 0; k < hleafs[i].count; i++)
+			if (h_all_indices[hleafs[i].offset + k] == -1)
+				printf("erreur chef\n");
+
+	for (uint i = 0; i < nb_leafs; i++)
+		printf("count: %i\n", hleafs[i].count);
+
 	// libération de la mémoire
-	cudaFree(d_all_indices);
 	cudaFree(dleafs);
-	cudaFree(d_all_indices);
-}
+	cudaFree(d_vertices);
+	cudaFree(d_triangles);
 
-
-__device__ bool isVertexInTriangleBVH(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris,
-	int* all_indices,
-	BVHNode* parent,
-	const float2& pixel
-)
-{
-	BVHNode* current_node = parent;
-
-	while (1)
-	{
-		for (uint i = 0; i < 4; i++)
-		{
-			BVHNode* child = current_node->childs[i];
-
-			if (child != nullptr // il y a un enfant
-				&& child->count > 0 // l'enfant a des triangles à tester
-				&& pixel.x >= child->min_pos.x && pixel.x <= child->max_pos.x // pixel dans la boite englobante
-				&& pixel.y >= child->min_pos.y && pixel.y <= child->max_pos.y)
-			{
-				if (child->isLeaf)
-				{
-					for (uint k = 0; k < child->count; k++)
-					{
-						uint tri_index = all_indices[child->offset + k];
-
-						float2 tri[3] = {
-							tris.first.first[tris.first.second[tri_index].x],
-							tris.first.first[tris.first.second[tri_index].y],
-							tris.first.first[tris.first.second[tri_index].z]
-						};
-
-						if (checkPointInTriangleFast(pixel, tri))
-							return true;
-					}
-				}
-				else
-				{
-					current_node = child;
-					break;
-				}
-			}
-		}
-	}
-
-	return false;
+	return { tree, h_all_indices };
 }
 
 void CudaCall::saveToBmp(const std::string& filename, int width, int height,
