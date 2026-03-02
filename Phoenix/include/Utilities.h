@@ -28,7 +28,7 @@ namespace Utils
     
     void correctTriangulation(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
 
-    earcutPoly convertGdstkToEarcutPoly(const Polygon* poly);
+    earcutPoly convertGdstkToEarcutPoly(const gdstk::Polygon* poly);
 
     std::pair<std::pair<float2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation);
 

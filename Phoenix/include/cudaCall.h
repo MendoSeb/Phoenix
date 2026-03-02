@@ -34,16 +34,28 @@ namespace CudaCall
 
 	struct BVHNode
 	{
-		int id = -1;
+		size_t id = (size_t)-1;
 
 		float2 min_pos { FLT_MAX, FLT_MAX };
 		float2 max_pos { FLT_MIN, FLT_MIN };
 
-		int offset = 0;
-		int count = 0;
+		size_t offset = (size_t)0;
+		size_t count = (size_t)0;
+		size_t temp_count = (size_t)0;
 		int childs[4] = { -1, -1, -1, -1 };
 
 		bool isLeaf = false;
+	};
+
+
+	struct Tile
+	{
+		uint offset = 0;
+		uint temp_count = 0;
+		uint count = 0;
+
+		float2 min_pos = { 0, 0 };
+		float2 max_pos = { 0, 0 };
 	};
 
 
@@ -55,10 +67,15 @@ namespace CudaCall
 	void rasterization(
 		std::pair<std::pair<float2*, uint3*>, uint2>& tris,
 		std::pair<BVHNode*, int*>& bvh,
-		uint& depth
+		int& depth,
+		int nb_indices
 	);
 
-	std::pair<BVHNode*, int*> bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris, uint& depth);
+	std::pair<std::pair<BVHNode*, int*>, int> bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris, int& depth);
+
+	void rasterizationV2(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
+
+	void rasterizationV3(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
 
 	void saveToBmp(const std::string& filename, int width, int height,
 		unsigned char* hostData);

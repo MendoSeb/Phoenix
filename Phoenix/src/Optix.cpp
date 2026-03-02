@@ -14,6 +14,8 @@
 #include <sstream>
 #include <gdstk/vec.hpp>
 #include <bitset>
+#include <GdstkUtils.h>
+#include <Utilities.h>
 
 
 Optix::Optix(int width, int height) : width(width), height(height)
@@ -58,7 +60,7 @@ void Optix::loadObj
 		return;
 	}
 
-	std::vector<Vertex> temp_vertices;
+	std::vector<optix_struct::Vertex> temp_vertices;
 	std::vector<Triangle> temp_triangles;
 
 	std::string line;
@@ -69,14 +71,14 @@ void Optix::loadObj
 
 		if (line_type == "v") {
 			// Found a vertex
-			Vertex v;
+			optix_struct::Vertex v;
 			ss >> v.x >> v.y >> v.z;
 			temp_vertices.push_back(v);
-			x_limit.first = min(x_limit.first, v.x);
-			x_limit.second = max(x_limit.second, v.x);
+			x_limit.first = std::min(x_limit.first, v.x);
+			x_limit.second = std::max(x_limit.second, v.x);
 
-			y_limit.first = min(y_limit.first, v.y);
-			y_limit.second = max(y_limit.second, v.y);
+			y_limit.first = std::min(y_limit.first, v.y);
+			y_limit.second = std::max(y_limit.second, v.y);
 		}
 
 		else if (line_type == "c")
@@ -125,7 +127,6 @@ void Optix::loadObj
 
 	std::cout << "Loaded " << temp_vertices.size() << " vertices and " << temp_triangles.size() << " triangles." << std::endl;
 }
-
 
 
 int Optix::init()
@@ -190,9 +191,9 @@ int Optix::init()
 		LOG, &LOG_SIZE,
 		&module
 	));
+
+	printf("OPTIX: init fait\n");
 }
-
-
 
 void Optix::loadShaders()
 {
@@ -221,9 +222,9 @@ void Optix::loadShaders()
 	hitgroup_desc.hitgroup.entryFunctionNameCH = "__closesthit__ch";
 	hitgroup_desc.hitgroup.moduleIS = nullptr; // Pas de programme d'intersection personnalisé
 	OPTIX_CHECK_LOG(optixProgramGroupCreate(context, &hitgroup_desc, 1, &program_group_options, LOG, &LOG_SIZE, &hit_program_group));
+
+	printf("OPTIX: chargement shader fait\n");
 }
-
-
 
 void Optix::initPipeline(CUdeviceptr d_tris)
 {
@@ -263,8 +264,9 @@ void Optix::initPipeline(CUdeviceptr d_tris)
 	sbt.hitgroupRecordCount = 1;
 
 	cudaFree(reinterpret_cast<void*>(d_tris));
-}
 
+	printf("OPTIX: init pipeline fait\n");
+}
 
 CUdeviceptr Optix::initScene()
 {
@@ -279,27 +281,27 @@ CUdeviceptr Optix::initScene()
 	int nb_v = 0;
 	int nb_f = 0;
 
-	void* d_vertices = nullptr;
+	float3* d_vertices = nullptr;
 	CUdeviceptr d_tris;
 
-	loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
+	loadObj("C:/Users/PC/Desktop/poc/test.obj", vertices, triangles, nb_v, nb_f);
+	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
+	//loadObj("C:/Users/PC/Desktop/poc/primary_x12.obj", vertices, triangles, nb_v, nb_f);
+	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
 	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_mono_couche_earcut.obj", vertices, triangles, nb_v, nb_f);
 	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_multi_couches_earcut.obj", objVertices, objTriangles);
 	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/triangulation_clipper2_multi_couche_v2.obj", objVertices, objTriangles);
-
+	// 
 	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_full_clipper2.obj", objVertices, objTriangles);
 	//loadObj("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_full_clipper2_inverse.obj", vertices, triangles, nb_v, nb_f);
 
-	int v_size = nb_v * sizeof(float3);
-	int f_size = nb_f * sizeof(uint3);
-
 	// allouer de la mémoire cuda
-	cudaMalloc(&d_vertices, v_size);
-	cudaMalloc(reinterpret_cast<void**>(&d_tris), f_size);
+	cudaMalloc((void**)&d_vertices, nb_v * sizeof(float3));
+	cudaMalloc((void**)&d_tris, nb_f * sizeof(uint3));
 
 	// remplir cette mémoire cuda
-	cudaMemcpy(d_vertices, vertices, v_size, cudaMemcpyHostToDevice);
-	cudaMemcpy(reinterpret_cast<void*>(d_tris), triangles, f_size, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_vertices, vertices, nb_v * sizeof(float3), cudaMemcpyHostToDevice);
+	cudaMemcpy(reinterpret_cast<void*>(d_tris), triangles, nb_f * sizeof(uint3), cudaMemcpyHostToDevice);
 
 	free(vertices);
 	free(triangles);
@@ -357,9 +359,10 @@ CUdeviceptr Optix::initScene()
 	cudaFree(reinterpret_cast<void*>(d_temp_buffer_gas));
 	cudaFree(reinterpret_cast<void*>(d_vertices));
 
+	printf("OPTIX: init scene fait\n");
+
 	return d_tris;
 }
-
 
 void Optix::render()
 {
@@ -370,22 +373,20 @@ void Optix::render()
 	Params params;
 
 	unsigned char* output_buffer_d;
-	cudaMalloc((void**)(&output_buffer_d), width * height);
+	CUDA_CHECK(cudaMalloc((void**)(&output_buffer_d), width * height * sizeof(unsigned char)));
 
 	params.image = output_buffer_d;
 	params.image_width = width;
 	params.image_height = height;
+	params.total_pixels = width * height;
 	params.handle = gas_handle;
-	params.cam_u = make_float3(0.828427136f, 0.0f, 0.0f);
-	params.cam_v = make_float3(0.0f, 0.828427136, 0.0f);
-	params.cam_w = make_float3(0.0f, 0.0f, 1.0f);
-	params.cam_eye = make_float3(0.0f, 0.0f, 1.0f); // reculer assez car en multi couche c'est épais
+	params.cam_eye = make_float3(x_limit.first, y_limit.first, 1.0f); // reculer assez car en multi couche c'est épais
 	//params.cam_eye = make_float3(0.3f, 0.24f, 5.0f);
 
 	//creation d'un rendu
 	CUdeviceptr d_param;
-	cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
-	cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice);
+	CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params)));
+	CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice));
 
 	int nbIter = 1;
 	auto start = std::chrono::high_resolution_clock::now();
@@ -393,14 +394,20 @@ void Optix::render()
 	for (int i = 0; i < nbIter; i++)
 		optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, /*depth=*/1);
 
+	cudaDeviceSynchronize();
+
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> duration_ms = (end - start);
 	std::cout << 1000.0f / (duration_ms.count() / nbIter) << " fps" << std::endl;
 
-	cudaDeviceSynchronize();
-	cudaFree(reinterpret_cast<void*>(d_param));
+	unsigned char* output_buffer_h = new unsigned char[width * height];
+	CUDA_CHECK(cudaMemcpy(output_buffer_h, output_buffer_d, width * height * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
-	saveGrayscaleBitmapCuda("output.bmp", width, height, output_buffer_d);
+	saveToBmp("ray_casting.bmp", width, height, output_buffer_h);
+
+	cudaFree(reinterpret_cast<void*>(d_param));
+	cudaFree(output_buffer_d);
+	delete[] output_buffer_h;
 }
 
 
@@ -501,7 +508,7 @@ void Optix::DMDSimulation()
 
 	cudaDeviceSynchronize();
 	cudaFree(reinterpret_cast<void*>(d_param));
-	saveGrayscaleBitmapCuda("output.bmp", img_width, img_height, output_buffer_d);
+	saveToBmp("output.bmp", img_width, img_height, output_buffer_d);
 }
 
 
@@ -635,21 +642,35 @@ void Optix::DMDSimulationV2()
 }
 
 
-void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int height, unsigned char* hostData) {
+void Optix::maxRender()
+{
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
 
-	/*for (int i = 0; i < width * height; i++)
-	{
-		if (hostData[i] > 0)
-			hostData[i] = 80 + rand() % 176;
-	}*/
+	double scale = 10000.0f;
+	GdstkUtils::normalize01(lib, scale);
 
-	// Check for CUDA errors
-	cudaError_t err = cudaGetLastError();
-	if (err != cudaSuccess) {
-		std::cerr << "CUDA Error: " << cudaGetErrorString(err) << std::endl;
-		delete[] hostData;
-		return;
-	}
+	earcutLayer triangulation = Utils::earcutTriangulation(lib);
+	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
+	Utils::correctTriangulation(tris);
+
+	Utils::writeObj(
+		"C:/Users/PC/Desktop/poc/test.obj",
+		tris.first.first,
+		tris.first.second,
+		tris.second.x,
+		tris.second.y
+	);
+}
+
+
+void Optix::saveToBmp(const std::string& filename, int width, int height,
+	unsigned char* hostData)
+{
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
 	// 2. Prepare BMP Headers and Palette
 	BitmapFileHeader fileHeader;
@@ -661,7 +682,9 @@ void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int 
 	infoHeader.size = sizeof(BitmapInfoHeader);
 
 	uint32_t palette_size = 256 * 4; // 256 grayscale entries, 4 bytes each
-	fileHeader.offset_data = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader) + palette_size;
+	fileHeader.offset_data = sizeof(BitmapFileHeader)
+		+ sizeof(BitmapInfoHeader) + palette_size;
+
 	fileHeader.file_size = fileHeader.offset_data + (width * height);
 
 	std::vector<char> palette(palette_size);
@@ -686,4 +709,7 @@ void Optix::saveGrayscaleBitmapCuda(const std::string& filename, int width, int 
 	file.write(reinterpret_cast<const char*>(hostData), width * height);
 
 	file.close();
+
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "Sauvegarde en .bmp en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 }

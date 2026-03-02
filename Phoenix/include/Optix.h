@@ -35,10 +35,12 @@ struct BitmapInfoHeader {
 };
 #pragma pack(pop)
 
-
-struct Vertex {
-    float x, y, z;
-};
+namespace optix_struct
+{
+    struct Vertex {
+        float x, y, z;
+    };
+}
 
 struct Triangle {
     size_t v1, v2, v3;
@@ -111,6 +113,17 @@ private:
         return out.str();
     }
 };
+
+#define CUDA_CHECK(call)                                                      \
+    do {                                                                      \
+        cudaError_t error = call;                                             \
+        if (error != cudaSuccess) {                                           \
+            std::stringstream ss;                                             \
+            ss << "CUDA Error: " << cudaGetErrorString(error) << " in "       \
+               << __FILE__ << " at line " << __LINE__;                        \
+            throw std::runtime_error(ss.str());                               \
+        }                                                                     \
+    } while (0)
 
 
 #define OPTIX_CHECK( call )                                                    \
@@ -234,7 +247,8 @@ public:
     // avec du double buffering
     void DMDSimulationV2();
 
+    void maxRender();
+
     /* Sauvegarde l'image en .bmp */
-    void saveGrayscaleBitmapCuda(const std::string& filename, int width, 
-        int height, unsigned char* img);
+    void saveToBmp(const std::string& filename, int width, int height, unsigned char* hostData);
 };

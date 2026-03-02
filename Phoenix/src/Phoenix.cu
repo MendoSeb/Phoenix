@@ -76,5 +76,5 @@ extern "C" __global__ void __closesthit__ch() {
 
 
 extern "C" __global__ void __miss__ms() {
-    optixSetPayload_0(0);
+    optixSetPayload_0(128);
 } 

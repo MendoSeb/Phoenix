@@ -132,17 +132,20 @@ void Demo::gdstkDemo()
 
 void Demo::optixDemo()
 {
-	Optix o(4096, 2176);
+	Optix o(10000, 10000); // 4096, 2176
 	o.init();
 	o.loadShaders();
+
+	o.maxRender();
 
 	CUdeviceptr d_tris = o.initScene();
 	o.initPipeline(d_tris);
 
-	//o.render();
+	o.render();
 
 	//o.DMDSimulation();
-	o.DMDSimulationV2();
+	//o.DMDSimulationV2();
+	//o.maxRender();
 }
 
 /*
@@ -582,9 +585,10 @@ void Demo::gpu()
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
 	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test2.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
 
-	double scale = 5000.0f;
+	double scale = 38400.0f;
 	GdstkUtils::normalize01(lib, scale);
 
 	earcutLayer triangulation = Utils::earcutTriangulation(lib);
@@ -597,46 +601,97 @@ void Demo::gpu()
 	//for (uint i = 0; i < tris.second.x; i++)
 	//	std::cout << "apres vertex: " << tris.first.first[i].x << ", " << tris.first.first[i].y << std::endl;
 
-	uint depth = 1;
-	std::pair<BVHNode*, int*> bvh = bvhV1(tris, depth);
+	int depth = 6;
+	//std::pair<std::pair<BVHNode*, int*>, int> bvh = bvhV1(tris, depth);
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	std::cout << "bvh fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 	
-	rasterization(tris, bvh, depth);
-
-	// récupérer les triangles des feuilles pour les imprimer
-	for (uint i = 0; i < 4; i++)
-	{
-		BVHNode* child = &bvh.first[bvh.first->childs[i]];
-		uint3* triangles = new uint3[child->count];
-
-		for (uint k = 0; k < child->count; k++)
-		{
-			uint tri_index = bvh.second[child->offset + k];
-
-			if (tri_index != -1)
-				triangles[k] = tris.first.second[tri_index];
-		}
-
-		Utils::writeObj(
-			("C:/Users/PC/Desktop/poc/test" + std::to_string(i) + ".obj").c_str(),
-			tris.first.first,
-			triangles,
-			tris.second.x,
-			child->count
-		);
-	}
-
+	//rasterization(tris, bvh.first, depth, bvh.second);
+	rasterizationV2(tris);
 
 	// pour phoenix
-	Utils::writeObj(
+	/*Utils::writeObj(
 		"C:/Users/PC/Desktop/poc/test.obj",
 		tris.first.first, 
 		tris.first.second, 
 		tris.second.x,
 		tris.second.y
-	);
+	);*/
+
+	cudaFreeHost(tris.first.first);
+	cudaFreeHost(tris.first.second);
+}
+
+
+void Demo::gpu2()
+{
+	using namespace CudaCall;
+
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
+
+	double scale = 5000.0f;
+	GdstkUtils::normalize01(lib, scale);
+
+	earcutLayer triangulation = Utils::earcutTriangulation(lib);
+	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
+	Utils::correctTriangulation(tris);
+
+	printf("Nb triangles: %i\n", tris.second.y);
+
+	//warping(tris, src_dst_boxes);
+
+	rasterizationV2(tris);
+
+	// pour phoenix
+	/*Utils::writeObj(
+		"C:/Users/PC/Desktop/poc/test.obj",
+		tris.first.first,
+		tris.first.second,
+		tris.second.x,
+		tris.second.y
+	);*/
+
+	cudaFreeHost(tris.first.first);
+	cudaFreeHost(tris.first.second);
+}
+
+
+void Demo::gpu3()
+{
+	using namespace CudaCall;
+
+	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
+
+	double scale = 30000.0f;
+	GdstkUtils::normalize01(lib, scale);
+
+	earcutLayer triangulation = Utils::earcutTriangulation(lib);
+	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
+	Utils::correctTriangulation(tris);
+
+	printf("Nb triangles: %i\n", tris.second.y);
+
+	//warping(tris, src_dst_boxes);
+
+	rasterizationV3(tris);
+
+	// pour phoenix
+	/*Utils::writeObj(
+		"C:/Users/PC/Desktop/poc/test.obj",
+		tris.first.first,
+		tris.first.second,
+		tris.second.x,
+		tris.second.y
+	);*/
 
 	cudaFreeHost(tris.first.first);
 	cudaFreeHost(tris.first.second);

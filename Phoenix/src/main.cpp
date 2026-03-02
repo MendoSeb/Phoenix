@@ -37,7 +37,9 @@ int main()
 
 	//rasterisationStep();
 
-	gpu();
+	//gpu();
+
+	gpu3();
 
 	return 0;
 }

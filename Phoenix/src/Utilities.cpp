@@ -355,6 +355,8 @@ namespace Utils
             << std::to_string(triangles[i].z + 1) << "\n";
 
         file.close();
+
+        printf("sauvegarde en .obj faite\n");
     }
 
     std::pair<std::vector<cv::Point2f>, std::vector<uint3>>  LoadObjVerticesTriangles(const char* filename)

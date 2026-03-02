@@ -52,4 +52,8 @@ namespace Demo
 	void rasterisationStep();
 
 	void gpu();
+
+	void gpu2();
+
+	void gpu3();
 }

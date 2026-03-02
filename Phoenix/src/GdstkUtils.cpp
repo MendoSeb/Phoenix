@@ -286,7 +286,6 @@ namespace GdstkUtils
 			}
 
 		double max_side_size = std::max(max_x - min_x, max_y - min_y);
-		printf("normalization: %f, %f, %f, %f\n", max_x, min_x, max_y, min_y);
 
 		// normalize
 		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
@@ -296,26 +295,6 @@ namespace GdstkUtils
 				p.x = ((p.x - min_x) / max_side_size) * scale;
 				p.y = ((p.y - min_y) / max_side_size) * scale;
 			}
-
-		min_x = DBL_MAX;
-		max_x = -DBL_MAX;
-		min_y = DBL_MAX;
-		max_y = -DBL_MAX;
-
-		// find minimum and maximum coordinate
-		for (size_t i = 0; i < lib.cell_array[0]->polygon_array.count; i++)
-			for (size_t k = 0; k < lib.cell_array[0]->polygon_array[i]->point_array.count; k++)
-			{
-				Vec2& p = lib.cell_array[0]->polygon_array[i]->point_array[k];
-				min_x = std::min(min_x, p.x);
-				max_x = std::max(max_x, p.x);
-
-				min_y = std::min(min_y, p.y);
-				max_y = std::max(max_y, p.y);
-			}
-
-		printf("after normalization: %f, %f, %f, %f\n", max_x, min_x, max_y, min_y);
-
 	}
 
 
