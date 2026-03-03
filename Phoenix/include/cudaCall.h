@@ -75,7 +75,7 @@ namespace CudaCall
 
 	void rasterizationV2(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
 
-	void rasterizationV3(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
+	void rasterizationV3(std::pair<std::pair<float2*, uint3*>, uint2>& tris, double scale);
 
 	void saveToBmp(const std::string& filename, int width, int height,
 		unsigned char* hostData);

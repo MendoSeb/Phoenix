@@ -29,8 +29,8 @@ __device__ bool checkPointInTriangleFast(const float2& pixel, float2 tri[3]
 	float d3 = sign(pixel.x, pixel.y, tri[2].x, tri[2].y, tri[0].x, tri[0].y);
 
 	// Un point est dedans si toutes les aires ont le même signe
-	bool has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-	bool has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+	bool has_neg = (d1 <= 0) || (d2 <= 0) || (d3 <= 0);
+	bool has_pos = (d1 >= 0) || (d2 >= 0) || (d3 >= 0);
 
 	// Le résultat est vrai si on n'a pas à la fois du positif et du négatif
 	// (ce qui couvre aussi le cas où l'un des d est à 0 : point sur l'arête)
@@ -392,7 +392,6 @@ void CudaCall::warping
 	std::cout << "Nb vertices = " << tris.second.x << std::endl;
 
 	warping_kernel <<<nb_blocks, nb_threads_per_blocks>>> (dv, dt, db, dm);
-	//kernel <<<1, 3>>> (dv, dt, db, dm);
 	cudaDeviceSynchronize();
 
 	// coppie du résultat vers les sommets
@@ -812,6 +811,7 @@ __global__ void rasterization_kernelV3(
 	int nb_triangles,
 	Tile* dtiles,
 	int nb_side_tiles,
+	int tile_size,
 	int* dindices,
 	uint2 img_dim,
 	unsigned char* img,
@@ -820,29 +820,24 @@ __global__ void rasterization_kernelV3(
 {
 	size_t thread_x = blockIdx.x * blockDim.x + threadIdx.x;
 	size_t thread_y = blockIdx.y * blockDim.y + threadIdx.y;
-	int thread_global_index = threadIdx.y * 16 + threadIdx.x;
+	int thread_global_index = threadIdx.y * blockDim.x + threadIdx.x;
 	int pixel_index = thread_y * img_dim.x + thread_x;
 
 	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y)
 		return;
 
-	int tile_size = 32;
-	int tile_index = (int)(thread_x / tile_size) * nb_side_tiles + (int)(thread_y / tile_size);
+	int tile_index = 
+		std::floor((float)thread_x / tile_size) * nb_side_tiles 
+		+ std::floor((float)thread_y / tile_size);
 
 	if (tile_index < 0 || tile_index >= (nb_side_tiles * nb_side_tiles))
-	{
-		printf("erreur index tuile\n");
 		return;
-	}
 
 	Tile tile = dtiles[tile_index];
 
 	// triangles en memoire partagée
 	for (int k = 0; k < tile.count; k++)
 	{
-		/// récupérer les triangles en vram vers la mémoire partagée (cache i guess)
-		/// chaque thread du groupe charge un triangle pour aller plus vite
-		
 		int index = tile.offset + k;
 
 		if (index >= 0 && index < nb_indices)
@@ -850,9 +845,9 @@ __global__ void rasterization_kernelV3(
 			int tri_id = dindices[index];
 
 			float2 tri[3] = {
-				{d_vertices[d_triangles[tri_id].x]},
-				{d_vertices[d_triangles[tri_id].y]},
-				{d_vertices[d_triangles[tri_id].z]}
+				d_vertices[d_triangles[tri_id].x],
+				d_vertices[d_triangles[tri_id].y],
+				d_vertices[d_triangles[tri_id].z]
 			};
 
 			float2 pixel{ thread_x, thread_y };
@@ -869,21 +864,22 @@ __global__ void rasterization_kernelV3(
 
 // un groupe de threads par triangle
 void CudaCall::rasterizationV3(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris
+	std::pair<std::pair<float2*, uint3*>, uint2>& tris,
+	double scale
 )
 {
 	// allocation mémoire
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	uint2 img_dim = { 30000, 30000 };
-	//uint2 img_dim = { 38400, 30000 };
+	uint2 img_dim = { scale, scale };
 	size_t nb_pixels = img_dim.x * img_dim.y;
 
-	int tile_size = 32;
+	int tile_size = 32; // taille en pixel, rapide avec 32, lent avec 256
 	int tile_side = std::ceil((float)std::max(img_dim.x, img_dim.y) / tile_size);
 	int nb_tiles = tile_side * tile_side;
 
+	printf("Nb triangles: %i\n", tris.second.y);
 	printf("tile_side %i\n", tile_side);
 	printf("NB tiles: %i\n", nb_tiles);
 
@@ -896,10 +892,6 @@ void CudaCall::rasterizationV3(
 	for (int x = 0; x < tile_side; x++)
 		for (int y = 0; y < tile_side; y++)
 		{
-			htiles[tile_index].count = 0;
-			htiles[tile_index].temp_count = 0;
-			htiles[tile_index].offset = 0;
-
 			htiles[tile_index].min_pos = { (float)x * tile_size, (float)y * tile_size };
 			htiles[tile_index].max_pos = { (float)(x + 1) * tile_size, (float)(y + 1) * tile_size };
 			tile_index++;
@@ -937,7 +929,6 @@ void CudaCall::rasterizationV3(
 	for (int i = 0; i < nb_tiles; i++)
 	{
 		htiles[i].offset = indices_array_size;
-		htiles[i].temp_count = 0;
 		indices_array_size += htiles[i].count;
 	}
 
@@ -946,7 +937,7 @@ void CudaCall::rasterizationV3(
 	int* dindices = nullptr;
 	cudaMalloc((void**)&dindices, indices_array_size * sizeof(int));
 	cudaMemset(dindices, -1, indices_array_size * sizeof(int));
-	printf("nb indices: %i\n", indices_array_size);
+	printf("Nb indices: %i\n", indices_array_size);
 	printf("Passe 1 faite\n");
 
 	/// passe 2: affectation des triangles dans le tableau d'indices global des tuiles
@@ -961,7 +952,7 @@ void CudaCall::rasterizationV3(
 
 	rasterization_kernelV3 
 		<<< dim3(std::ceil(img_dim.x / 16.0f), std::ceil(img_dim.y / 16.0f), 1), dim3(16, 16, 1) >>>
-		(dv, dt, tris.second.y, dtiles, tile_side, dindices, img_dim, dimg, indices_array_size);
+		(dv, dt, tris.second.y, dtiles, tile_side, tile_size, dindices, img_dim, dimg, indices_array_size);
 
 	cudaDeviceSynchronize();
 
@@ -974,7 +965,7 @@ void CudaCall::rasterizationV3(
 	cudaMemcpy(img, dimg, nb_pixels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
 	std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
-	std::cout << "copie de l'image gpu -> cpu " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
+	std::cout << "Copie de l'image gpu -> cpu " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
 
 	CudaCall::saveToBmp(
 		"C:/Users/PC/Desktop/poc/rasterizationV3.bmp",

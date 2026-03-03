@@ -671,27 +671,16 @@ void Demo::gpu3()
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
 
-	double scale = 30000.0f;
+	double scale = 20000.0f;
 	GdstkUtils::normalize01(lib, scale);
 
 	earcutLayer triangulation = Utils::earcutTriangulation(lib);
 	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
 	Utils::correctTriangulation(tris);
 
-	printf("Nb triangles: %i\n", tris.second.y);
+	warping(tris, src_dst_boxes);
 
-	//warping(tris, src_dst_boxes);
-
-	rasterizationV3(tris);
-
-	// pour phoenix
-	/*Utils::writeObj(
-		"C:/Users/PC/Desktop/poc/test.obj",
-		tris.first.first,
-		tris.first.second,
-		tris.second.x,
-		tris.second.y
-	);*/
+	rasterizationV3(tris, scale);
 
 	cudaFreeHost(tris.first.first);
 	cudaFreeHost(tris.first.second);
