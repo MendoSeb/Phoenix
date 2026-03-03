@@ -3,6 +3,8 @@
 #include <cuda_runtime.h>
 #include "Warping.h"
 #include <tiffio.h>
+#include <device_launch_parameters.h>
+
 
 using namespace CudaCall;
 
@@ -13,8 +15,7 @@ __device__ bool isVertexRightOfSegment(const float2& v, const float2& s1, const 
 	return (v.x - s1.x) * (s2.y - s1.y) - (v.y - s1.y) * (s2.x - s1.x) >= 0.0f;
 }
 
-__device__ bool checkPointInTriangleFast(const float2& pixel, float2 tri[3]
-) 
+__device__ bool checkPointInTriangleFast(const float2& pixel, float2 tri[3]) 
 {
 	// On calcule le signe de l'aire formée par le point et chaque arête
 	// (ax-px)*(by-py) - (ay-py)*(bx-px)
@@ -37,14 +38,6 @@ __device__ bool checkPointInTriangleFast(const float2& pixel, float2 tri[3]
 	return !(has_neg && has_pos);
 }
 
-// les triangles sont dans le sens horaire
-__device__ bool isVertexInsideTriangle(const float2& vertex, const float2 tri[3])
-{
-	return isVertexRightOfSegment(vertex, tri[0], tri[1])
-		&& isVertexRightOfSegment(vertex, tri[1], tri[2])
-		&& isVertexRightOfSegment(vertex, tri[2], tri[0]);
-}
-
 // les boites doivent être dans le sens horaire
 __device__ bool isVertexInsideBox(const float2 box[4], const float2& vertex)
 {
@@ -60,8 +53,8 @@ __device__ bool isVertexInsideBox(const float2 box[4], const float2& vertex)
 		{box[3].x, box[3].y},
 	};
 
-	return isVertexInsideTriangle(vertex, tri1)
-		|| isVertexInsideTriangle(vertex, tri2);
+	return checkPointInTriangleFast(vertex, tri1)
+		|| checkPointInTriangleFast(vertex, tri2);
 }
 
 __device__ bool isVertexInsideSquareBox(const float2& min, const float2& max, const float2& vertex)
@@ -820,44 +813,69 @@ __global__ void rasterization_kernelV3(
 {
 	size_t thread_x = blockIdx.x * blockDim.x + threadIdx.x;
 	size_t thread_y = blockIdx.y * blockDim.y + threadIdx.y;
-	int thread_global_index = threadIdx.y * blockDim.x + threadIdx.x;
+	int thread_local_id = threadIdx.y * blockDim.x + threadIdx.x;
 	int pixel_index = thread_y * img_dim.x + thread_x;
 
-	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y)
-		return;
+	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y) return;
 
 	int tile_index = 
 		std::floor((float)thread_x / tile_size) * nb_side_tiles 
 		+ std::floor((float)thread_y / tile_size);
 
-	if (tile_index < 0 || tile_index >= (nb_side_tiles * nb_side_tiles))
-		return;
+	if (tile_index < 0 || tile_index >= (nb_side_tiles * nb_side_tiles)) return;
 
 	Tile tile = dtiles[tile_index];
+	float2 pixel{ thread_x, thread_y };
+
+	if (tile.count == 0) return;
+	bool pixel_hit = false; // does the pixel touch a triangle?
 
 	// triangles en memoire partagée
-	for (int k = 0; k < tile.count; k++)
-	{
-		int index = tile.offset + k;
+	const uint chunk_size = 256;
+	int nb_chunk = std::ceil((float)tile.count / (float)chunk_size);
+	__shared__ float2 triangles[chunk_size * 3];
 
-		if (index >= 0 && index < nb_indices)
+	for (int i = 0; i < nb_chunk; i++)
+	{
+		int index = tile.offset + (i * chunk_size) + thread_local_id;
+
+		if (index >= 0 && index < nb_indices && dindices[index] != -1)
 		{
 			int tri_id = dindices[index];
 
-			float2 tri[3] = {
-				d_vertices[d_triangles[tri_id].x],
-				d_vertices[d_triangles[tri_id].y],
-				d_vertices[d_triangles[tri_id].z]
-			};
+			triangles[thread_local_id * 3] = d_vertices[d_triangles[tri_id].x];
+			triangles[thread_local_id * 3 + 1] = d_vertices[d_triangles[tri_id].y];
+			triangles[thread_local_id * 3 + 2] = d_vertices[d_triangles[tri_id].z];
+		}
 
-			float2 pixel{ thread_x, thread_y };
+		__syncthreads();
 
-			if (checkPointInTriangleFast(pixel, tri))
+		if (!pixel_hit)
+		{
+			// count valid triangles
+			int nb_tris = chunk_size;
+
+			if (chunk_size > tile.count - (i * chunk_size))
+				nb_tris = tile.count - (i * chunk_size);
+
+			for (int k = 0; k < nb_tris; k++)
 			{
-				img[pixel_index] = 255;
-				return;
+				float2 tri[3] = {
+					triangles[k * 3],
+					triangles[k * 3 + 1],
+					triangles[k * 3 + 2]
+				};
+
+				if (checkPointInTriangleFast(pixel, tri))
+				{
+					img[pixel_index] = 255;
+					pixel_hit = true;
+					break;
+				}
 			}
 		}
+
+		__syncthreads();
 	}
 }
 
