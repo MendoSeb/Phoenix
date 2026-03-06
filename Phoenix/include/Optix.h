@@ -247,8 +247,6 @@ public:
     // avec du double buffering
     void DMDSimulationV2();
 
-    void maxRender();
-
     /* Sauvegarde l'image en .bmp */
     void saveToBmp(const std::string& filename, int width, int height, unsigned char* hostData);
 };

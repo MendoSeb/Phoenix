@@ -136,8 +136,6 @@ void Demo::optixDemo()
 	o.init();
 	o.loadShaders();
 
-	o.maxRender();
-
 	CUdeviceptr d_tris = o.initScene();
 	o.initPipeline(d_tris);
 
@@ -578,110 +576,36 @@ void Demo::rasterisationStep()
 }
 
 
-void Demo::gpu()
+void Demo::AltijetRasterization(float2 circuit_inch_size, int dpi)
 {
 	using namespace CudaCall;
 
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
-	double scale = 38400.0f;
-	GdstkUtils::normalize01(lib, scale);
-
-	earcutLayer triangulation = Utils::earcutTriangulation(lib);
-	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
-	Utils::correctTriangulation(tris);
-
-	//warping(tris, src_dst_boxes);
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-	//for (uint i = 0; i < tris.second.x; i++)
-	//	std::cout << "apres vertex: " << tris.first.first[i].x << ", " << tris.first.first[i].y << std::endl;
-
-	int depth = 6;
-	//std::pair<std::pair<BVHNode*, int*>, int> bvh = bvhV1(tris, depth);
-
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "bvh fait en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-	
-	//rasterization(tris, bvh.first, depth, bvh.second);
-	rasterizationV2(tris);
-
-	// pour phoenix
-	/*Utils::writeObj(
-		"C:/Users/PC/Desktop/poc/test.obj",
-		tris.first.first, 
-		tris.first.second, 
-		tris.second.x,
-		tris.second.y
-	);*/
-
-	cudaFreeHost(tris.first.first);
-	cudaFreeHost(tris.first.second);
-}
-
-
-void Demo::gpu2()
-{
-	using namespace CudaCall;
-
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
-
-	double scale = 5000.0f;
-	GdstkUtils::normalize01(lib, scale);
-
-	earcutLayer triangulation = Utils::earcutTriangulation(lib);
-	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
-	Utils::correctTriangulation(tris);
-
-	printf("Nb triangles: %i\n", tris.second.y);
-
-	//warping(tris, src_dst_boxes);
-
-	rasterizationV2(tris);
-
-	// pour phoenix
-	/*Utils::writeObj(
-		"C:/Users/PC/Desktop/poc/test.obj",
-		tris.first.first,
-		tris.first.second,
-		tris.second.x,
-		tris.second.y
-	);*/
-
-	cudaFreeHost(tris.first.first);
-	cudaFreeHost(tris.first.second);
-}
-
-
-void Demo::gpu3()
-{
-	using namespace CudaCall;
-
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/marion/004672-647720058a0.top.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
 
-	double scale = 20000.0f;
-	GdstkUtils::normalize01(lib, scale);
+	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
+	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
 
-	earcutLayer triangulation = Utils::earcutTriangulation(lib);
+	double scale = std::max(img_dim.x, img_dim.y);
+	GdstkUtils::Scaling(lib, scale);
+
+	earcutLayer triangulation = Utils::earcutTriangulation(lib, 20);
 	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
-	Utils::correctTriangulation(tris);
+	printf("Nb triangles: %i\n", tris.second.y);
 
-	warping(tris, src_dst_boxes);
+	//warping(tris.first.first, tris.first.second, tris.second.x, tris.second.y, src_dst_boxes);
+	unsigned char* img = rasterization(tris.first.first, tris.first.second, 
+		tris.second.x, tris.second.y, scale, img_dim);
 
-	rasterizationV3(tris, scale);
+	saveToBmp("C:/Users/PC/Desktop/poc/rasterizationV3.bmp", img_dim.x, img_dim.y, img);
 
-	cudaFreeHost(tris.first.first);
-	cudaFreeHost(tris.first.second);
+	cudaFree(tris.first.first);
+	cudaFree(tris.first.second);
+
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "! Total (ouverture jusqu'a liberation memoire) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 }

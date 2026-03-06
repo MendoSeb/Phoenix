@@ -65,26 +65,35 @@ __device__ bool isVertexInsideSquareBox(const float2& min, const float2& max, co
 __global__ void warping_kernel(
 	float2* vertices,
 	uint3* triangles,
+	uint nb_vertices,
 	Warping::Boxes* src_dst,
 	Eigen::Matrix3d* homography_matrices
 )
 {
 	size_t thread_global_id = blockIdx.x * blockDim.x + threadIdx.x;
-	float2* vertex = &vertices[thread_global_id];
 
-	// for every src box
-	for (size_t i = 0; i < 1; i++)
-		if (isVertexInsideBox(src_dst[i].src, *vertex))
+	if (thread_global_id >= 0 && thread_global_id < nb_vertices)
+	{
+		float2* vertex = &vertices[thread_global_id];
+
+		// for every src box
+		for (size_t i = 0; i < 1; i++)
 		{
-			Eigen::Matrix<double, 3, 1> p;
-			p.row(0) << vertex->x;
-			p.row(1) << vertex->y;
-			p.row(2) << 1;
+			if (isVertexInsideBox(src_dst[i].src, *vertex))
+			{
+				Eigen::Matrix<double, 3, 1> p;
+				p.row(0) << vertex->x;
+				p.row(1) << vertex->y;
+				p.row(2) << 1;
 
-			p = homography_matrices[i] * p;
-			vertex->x = p(0) / p(2);
-			vertex->y = p(1) / p(2);
+				p = homography_matrices[i] * p;
+				vertex->x = p(0) / p(2);
+				vertex->y = p(1) / p(2);
+
+				return;
+			}
 		}
+	}
 }
 
 
@@ -102,123 +111,6 @@ __device__ float4 getTriangleBoundingBox(float2 tri[3])
 	}
 
 	return min_max;
-}
-
-__device__ bool isVertexInTriangleBVH(
-	float2* d_vertices,
-	uint3* d_triangles,
-	BVHNode* dtree,
-	int* d_all_indices,
-	int depth,
-	uint nb_triangles,
-	float2& pixel
-)
-{
-	BVHNode* current_node = &dtree[0];
-	int nb_leafs = std::pow(4, depth);
-
-	for (int p = 0; p < depth; p++)
-	{
-		for (int i = 0; i < 4; i++)
-		{
-			BVHNode* child = nullptr;
-
-			if (current_node->childs[i] >= 0)
-				child = &dtree[current_node->childs[i]];
-
-			if (child
-				&& pixel.x >= child->min_pos.x && pixel.x <= child->max_pos.x // pixel dans la boite englobante
-				&& pixel.y >= child->min_pos.y && pixel.y <= child->max_pos.y)
-			{
-				if (p == depth - 1)
-				{
-					for (int k = 0; k < child->count; k++)
-					{
-						int tri_index = d_all_indices[child->offset + k];
-
-						if (tri_index >= 0 && tri_index < nb_triangles * nb_leafs)
-						{
-							float2 tri[3] = {
-								d_vertices[d_triangles[tri_index].x],
-								d_vertices[d_triangles[tri_index].y],
-								d_vertices[d_triangles[tri_index].z]
-							};
-
-							if (checkPointInTriangleFast(pixel, tri))
-								return true;
-						}
-					}
-					return false;
-				}
-				else
-				{
-					current_node = child;
-					break;
-				}
-			}
-		}
-	}
-	return false;
-}
-
-
-__global__ void rasterization_kernel(
-	float2* d_vertices,
-	uint3* d_triangles,
-	BVHNode* dtree,
-	int* d_all_indices,
-	size_t nb_triangles,
-	uint depth,
-	uint2 img_dim,
-	unsigned char* img
-)
-{
-	size_t thread_x = blockIdx.x * blockDim.x + threadIdx.x;
-	size_t thread_y = blockIdx.y * blockDim.y + threadIdx.y;
-	size_t pixel_index = thread_y * img_dim.x + thread_x;
-
-	if (pixel_index < img_dim.x * img_dim.y)
-	{
-		float2 pixel{ thread_x, thread_y };
-
-		if (isVertexInTriangleBVH(d_vertices, d_triangles, dtree, d_all_indices, depth, nb_triangles, pixel))
-			img[pixel_index] = 255;
-	}
-}
-
-
-
-__global__ void rasterization_kernelV2(
-	float2* d_vertices,
-	uint3* d_triangles,
-	size_t nb_triangles,
-	uint2 img_dim,
-	unsigned char* img
-)
-{
-	size_t tri_id = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (tri_id >= nb_triangles)
-		return;
-
-	float2 tri[3] = {
-		{d_vertices[d_triangles[tri_id].x]},
-		{d_vertices[d_triangles[tri_id].y]},
-		{d_vertices[d_triangles[tri_id].z]}
-	};
-
-	float4 bb = getTriangleBoundingBox(tri);
-
-	for (int x = bb.x; x < bb.z; x++)
-		for (int y = bb.y; y < bb.w; y++)
-		{
-			float2 pixel{x, y};
-
-			if (x >= 0 && x < img_dim.x
-				&& y >= 0 && y < img_dim.y
-				&& checkPointInTriangleFast(pixel, tri))
-				img[y * img_dim.x + x] = 255;
-		}
 }
 
 
@@ -286,67 +178,17 @@ __device__ bool isTriangleInBoundingBox(float2 tri[3], const float2& min_p, cons
 }
 
 
-__global__ void bvhCount(
-	CudaCall::BVHNode* dleafs,
-	float2* d_vertices,
-	uint3* d_triangles,
-	uint nb_triangles,
-	uint nb_leafs
-)
-{
-	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (tri_id >= 0 && tri_id < nb_triangles)
-	{
-		float2 tri[3] = {
-			d_vertices[d_triangles[tri_id].x],
-			d_vertices[d_triangles[tri_id].y],
-			d_vertices[d_triangles[tri_id].z]
-		};
-
-		for (uint i = 0; i < nb_leafs; i++)
-			if (isTriangleInBoundingBox(tri, dleafs[i].min_pos, dleafs[i].max_pos))
-				atomicAdd(&dleafs[i].count, 1);
-	}
-}
-
-
-__global__ void bvhAssociate(
-	CudaCall::BVHNode* dleafs,
-	int* d_all_indices,
-	float2* d_vertices,
-	uint3* d_triangles,
-	uint nb_triangles,
-	uint nb_leafs
-)
-{
-	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (tri_id >= 0 && tri_id < nb_triangles)
-	{
-		float2 tri[3] = {
-			d_vertices[d_triangles[tri_id].x],
-			d_vertices[d_triangles[tri_id].y],
-			d_vertices[d_triangles[tri_id].z]
-		};
-
-		for (uint i = 0; i < nb_leafs; i++)
-		{
-			if (isTriangleInBoundingBox(tri, dleafs[i].min_pos, dleafs[i].max_pos))
-			{
-				size_t temp_count = atomicAdd(&dleafs[i].temp_count, 1);
-				d_all_indices[dleafs[i].offset + temp_count] = tri_id;
-			}
-		}
-	}
-}
-
 void CudaCall::warping
 (
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris,
+	float2* dv, 
+	uint3* dt, 
+	uint nb_vertices,
+	uint nb_triangles,
 	std::vector<Warping::Boxes>& src_dst
 )
 {
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+
 	//calcul des matrices de transformation
 	Warping::Boxes* src_dst2 = new Warping::Boxes[src_dst.size()];
 	Eigen::Matrix3d* homography_matrices = new Eigen::Matrix3d[src_dst.size()];
@@ -354,385 +196,58 @@ void CudaCall::warping
 	for (size_t i = 0; i < src_dst.size(); i++)
 	{
 		src_dst2[i] = src_dst[i];
-
-		homography_matrices[i] =
-			Warping::getPerspectiveMatrixTransform(src_dst[i].src, src_dst[i].dst);
+		homography_matrices[i] = Warping::getPerspectiveMatrixTransform(src_dst[i].src, src_dst[i].dst);
 	}
 
 	// allocation mémoire gpu
-	float2 *dv = nullptr;
-	uint3* dt = nullptr;
 	Warping::Boxes* db = nullptr;
 	Eigen::Matrix3d* dm = nullptr;
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
 
-	cudaMallocAsync((void**)&dv, sizeof(float2) * tris.second.x, stream);
-	cudaMallocAsync((void**)&dt, sizeof(uint3) * tris.second.y, stream);
 	cudaMallocAsync((void**)&db, sizeof(Warping::Boxes) * src_dst.size(), stream);
 	cudaMallocAsync((void**)&dm, sizeof(Eigen::Matrix3d) * src_dst.size(), stream);
 
-	cudaMemcpyAsync(dv, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dt, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice, stream);
 	cudaMemcpyAsync(db, src_dst2, src_dst.size() * sizeof(Warping::Boxes), cudaMemcpyHostToDevice, stream);
 	cudaMemcpyAsync(dm, homography_matrices, src_dst.size() * sizeof(Eigen::Matrix3d), cudaMemcpyHostToDevice, stream);
 
 	// appel
-	size_t nb_blocks = std::floor(tris.second.x / 1024);
 	size_t nb_threads_per_blocks = 1024;
+	size_t nb_blocks = std::floor(nb_vertices / 1024);
 	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
-	std::cout << "Nb vertices = " << tris.second.x << std::endl;
+	std::cout << "Nb vertices = " << nb_vertices << std::endl;
 
-	warping_kernel <<<nb_blocks, nb_threads_per_blocks>>> (dv, dt, db, dm);
+	warping_kernel <<<nb_blocks, nb_threads_per_blocks>>> (dv, dt, nb_vertices, db, dm);
+
 	cudaDeviceSynchronize();
-
-	// coppie du résultat vers les sommets
-	cudaMemcpy(tris.first.first, dv, tris.second.x * sizeof(float2), cudaMemcpyDeviceToHost);
-
 	// libération mémoire
-	cudaFreeAsync(dv, stream);
-	cudaFreeAsync(dt, stream);
 	cudaFreeAsync(db, stream);
 	cudaFreeAsync(dm, stream);
 	cudaStreamDestroy(stream);
 
 	delete src_dst2;
 	delete homography_matrices;
-}
-
-
-// un thread par pixel (avec bvh)
-void CudaCall::rasterization(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris,
-	std::pair<BVHNode*, int*>& bvh,
-	int& depth,
-	int nb_indices
-)
-{
-	/*for (uint i = 0; i < nb_indices; i++)
-		printf("indices; %i\n", bvh.second[i]);*/
-
-	uint nb_nodes = (std::pow(4, depth + 1) - 1) / 3;
-	uint nb_leafs = std::pow(4, depth);
-
-	/*for (uint i = 0; i < tris.second.y; i++)
-		printf("tri %i, %f, %f, %f, %f, %f, %f\n", 
-			i,
-			tris.first.first[tris.first.second[i].x].x, tris.first.first[tris.first.second[i].x].y,
-			tris.first.first[tris.first.second[i].y].x, tris.first.first[tris.first.second[i].y].y,
-			tris.first.first[tris.first.second[i].z].x, tris.first.first[tris.first.second[i].z].y);
-
-	for (uint i = 0; i < 4; i++)
-	{
-		BVHNode* child = &bvh.first[bvh.first[0].childs[i]];
-		printf("\nleaf id: %i, %i\n", child->id, child->offset);
-
-		for (uint k = 0; k < child->count; k++)
-		{
-			printf("k: %i, index: %i ", child->offset + k, bvh.second[child->offset + k]);
-		}
-	}*/
-
-	// allocation mémoire
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
-
-	int* d_all_indices = nullptr;
-	cudaMallocAsync((void**)&d_all_indices, nb_indices * sizeof(int), stream);
-	cudaMemcpyAsync(d_all_indices, bvh.second, nb_indices * sizeof(int), cudaMemcpyHostToDevice, stream);
-
-	BVHNode* dtree = nullptr;
-	cudaMallocAsync((void**)&dtree, nb_nodes * sizeof(CudaCall::BVHNode), stream);
-	cudaMemcpyAsync(dtree, bvh.first, nb_nodes * sizeof(CudaCall::BVHNode), cudaMemcpyHostToDevice, stream);
-
-	uint2 img_dim = { 10000, 10000 };
-	size_t nb_pixels = img_dim.x * img_dim.y;
-
-	// sommets et triangles
-	float2* dv = nullptr;
-	uint3* dt = nullptr;
-	unsigned char* dimg = nullptr;
-
-	std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
-
-	cudaMallocAsync((void**)&dv, sizeof(float2) * tris.second.x, stream);
-	cudaMallocAsync((void**)&dt, sizeof(uint3) * tris.second.y, stream);
-	cudaMallocAsync((void**)&dimg, sizeof(unsigned char) * nb_pixels, stream);
-
-	cudaMemcpyAsync(dv, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dt, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice, stream);
-
-	cudaMemsetAsync(dimg, 0, sizeof(unsigned char) * nb_pixels, stream);
-
-	std::chrono::steady_clock::time_point s2 = std::chrono::steady_clock::now();
-	std::cout << "allocation vram en " << std::chrono::duration_cast<std::chrono::milliseconds>(s2 - s1).count() << " ms" << std::endl;
-
-	// call
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-	uint nb_x_blocks = std::ceil((float)img_dim.x / 16.0f);
-	uint nb_y_blocks = std::ceil((float)img_dim.y / 16.0f);
-
-	rasterization_kernel <<< dim3(nb_x_blocks, nb_y_blocks, 1), dim3(16, 16, 1) >>>
-		(dv, dt, dtree, d_all_indices, tris.second.y, depth, img_dim, dimg);
-
-	/*rasterization_kernel << < dim3(1, 1, 1), dim3(1, 1, 1) >> >
-		(dv, dt, dtree, d_all_indices, tris.second.y, depth, img_dim, dimg);*/
-
-	cudaDeviceSynchronize();
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "Rasterisation en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-
-	std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
-	unsigned char* img = new unsigned char[nb_pixels];
-	cudaMemcpy(img, dimg, nb_pixels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-
-	std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
-	std::cout << "copie de l'image gpu -> cpu " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
-
-	CudaCall::saveToBmp(
-		"C:/Users/PC/Desktop/poc/rasterization.bmp", 
-		img_dim.x, 
-		img_dim.y,
-		img
-	);
-
-	// libération de la mémoire
-	cudaFreeAsync(dv, stream);
-	cudaFreeAsync(dt, stream);
-	cudaFree(d_all_indices);
-	cudaFreeAsync(dimg, stream);
-	cudaStreamDestroy(stream);
-
-	delete img;
+	std::cout << "! warping en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 }
-
-std::pair<std::pair<BVHNode*, int*>, int> CudaCall::bvhV1(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris, 
-	int& depth
-)
-{
-	uint nb_nodes = (std::pow(4, depth + 1) - 1) / 3;
-	uint nb_leafs = std::pow(4, depth);
-
-	printf("NB leafs: %i\nNB nodes: %i\nNB triangles: %i\n", nb_leafs, nb_nodes, tris.second.y);
-
-	/// construire l'arbre équilibré (équilibré je crois)
-	std::vector<BVHNode*> leafs;
-	uint current_node_index = 0;
-
-	BVHNode *tree = nullptr, *dtree = nullptr;
-	cudaMallocHost((void**)&tree, nb_nodes * sizeof(BVHNode));
-
-	tree[0].min_pos = { 0, 0 };
-	tree[0].max_pos = { 38400, 30000 };
-
-	// fonction récursive pour construire l'arbre
-	auto lambda = [&](auto&& lambda, int parent_index, uint current_depth)
-	{
-		if (current_depth == depth)
-			return;
-
-		float half_width = (tree[parent_index].max_pos.x - tree[parent_index].min_pos.x) / 2.0f;
-		float half_height = (tree[parent_index].max_pos.y - tree[parent_index].min_pos.y) / 2.0f;
-		int current_child_index = 0;
-
-		for (float x = 0; x < 2; x++)
-			for (float y = 0; y < 2; y++)
-			{
-				BVHNode* child = new BVHNode();
-				child->min_pos.x = tree[parent_index].min_pos.x + x * half_width;
-				child->min_pos.y = tree[parent_index].min_pos.y + y * half_height;
-				child->max_pos.x = tree[parent_index].min_pos.x + (x + 1) * half_width;
-				child->max_pos.y = tree[parent_index].min_pos.y + (y + 1) * half_height;
-
-				current_node_index++;
-				child->id = current_node_index;
-				tree[parent_index].childs[current_child_index] = current_node_index;
-				tree[current_node_index] = *child;
-
-				if (current_depth + 1 == depth)
-				{
-					child->isLeaf = true;
-					leafs.push_back(child);
-				}
-
-				lambda(lambda, current_node_index, current_depth + 1);
-				current_child_index++;
-			}
-	};
-
-	lambda(lambda, 0, 0);
-
-	/*for (uint i = 0; i < nb_nodes; i++)
-		printf("node id: %i, child: %i, %i, %i, %i\n",
-			tree[i].id, tree[i].childs[0], tree[i].childs[1], tree[i].childs[2], tree[i].childs[3]);*/
-
-	/// affecter les triangles aux feuilles
-	// mémoire des feuilles
-	BVHNode *hleafs = nullptr;
-	BVHNode *dleafs = nullptr;
-	cudaMallocHost((void**)&hleafs, nb_leafs * sizeof(BVHNode));
-
-	for (uint i = 0; i < nb_leafs; i++)
-		hleafs[i] = *leafs[i];
-
-	cudaMalloc((void**)&dleafs, nb_leafs * sizeof(BVHNode));
-	cudaMemcpy(dleafs, hleafs, nb_leafs * sizeof(BVHNode), cudaMemcpyHostToDevice);
-
-	// mémoire des sommets et triangles
-	float2* d_vertices = nullptr;
-	uint3* d_triangles = nullptr;
-
-	cudaMalloc((void**)&d_vertices, tris.second.x * sizeof(float2));
-	cudaMalloc((void**)&d_triangles, tris.second.y * sizeof(uint3));
-	cudaMemcpy(d_vertices, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_triangles, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice);
-
-	uint nb_blocks = std::ceil((float)tris.second.y / 256.0f); // un thread par triangle
-	bvhCount <<<nb_blocks, 256>>> (dleafs, d_vertices, d_triangles, tris.second.y, nb_leafs);
-	cudaDeviceSynchronize();
-
-	//// copie des feuilles modifiées vers le cpu
-	cudaMemcpy(hleafs, dleafs, nb_leafs * sizeof(BVHNode), cudaMemcpyDeviceToHost);
-
-	/// passe pour associer les triangles des feuilles dans le tableau global de taille: sum des count
-	int nb_indices = 0;
-
-	for (uint i = 0; i < nb_leafs; i++)
-	{
-		hleafs[i].offset = nb_indices;
-		nb_indices += hleafs[i].count;
-	}
-
-	for (uint i = 0; i < nb_leafs; i++)
-		tree[hleafs[i].id] = hleafs[i];
-
-	std::cout << "nb_indices: " << nb_indices << std::endl;
-
-	cudaMemcpy(dleafs, hleafs, nb_leafs * sizeof(BVHNode), cudaMemcpyDeviceToHost);
-
-	// mémoire des indices des triangles des feuilles
-	int* d_all_indices = nullptr;
-	cudaMalloc((void**)&d_all_indices, nb_indices * sizeof(int));
-	cudaMemset(d_all_indices, -1, nb_indices * sizeof(int));
-
-	bvhAssociate <<<nb_blocks, 256>>> (dleafs, d_all_indices, d_vertices, d_triangles, tris.second.y, nb_leafs);
-	cudaDeviceSynchronize();
-
-	int* h_all_indices = nullptr;
-	cudaMallocHost((void**)&h_all_indices, nb_indices * sizeof(int));
-	cudaMemcpy(h_all_indices, d_all_indices, nb_indices * sizeof(int), cudaMemcpyDeviceToHost);
-
-	/*for (uint i = 0; i < nb_leafs; i++)
-	{
-		printf("leafs: %i, offset: %i, count: %i, is_leaf: %i\n", 
-			hleafs[i].id, hleafs[i].offset, hleafs[i].count, hleafs[i].isLeaf);
-
-		for (uint k = 0; k < hleafs[i].count; k++)
-			printf("indices bvh: %i\n", h_all_indices[hleafs[i].offset + k]);
-
-		for (uint k = 0; k < hleafs[i].count; k++)
-			if (h_all_indices[hleafs[i].offset + k] < 0)
-				printf("erreur chef\n");
-	}
-
-	for (uint i = 0; i < nb_nodes; i++)
-		printf("node id: %i, child: %i, %i, %i, %i\n", 
-			tree[i].id, tree[i].childs[0], tree[i].childs[1], tree[i].childs[2], tree[i].childs[3]);*/
-
-	// libération de la mémoire
-	cudaFree(dleafs);
-	cudaFree(d_vertices);
-	cudaFree(d_triangles);
-
-	return { { tree, h_all_indices }, nb_indices};
-}
-
-
-// un thread par triangle
-void CudaCall::rasterizationV2(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris
-)
-{
-	// allocation mémoire
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
-
-	uint2 img_dim = { 38400, 30000 };
-	size_t nb_pixels = img_dim.x * img_dim.y;
-
-	// sommets et triangles
-	float2* dv = nullptr;
-	uint3* dt = nullptr;
-	unsigned char* dimg = nullptr;
-
-	std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
-
-	cudaMallocAsync((void**)&dv, sizeof(float2) * tris.second.x, stream);
-	cudaMallocAsync((void**)&dt, sizeof(uint3) * tris.second.y, stream);
-	cudaMallocAsync((void**)&dimg, sizeof(unsigned char) * nb_pixels, stream);
-
-	cudaMemcpyAsync(dv, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dt, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice, stream);
-
-	cudaMemsetAsync(dimg, 0, sizeof(unsigned char) * nb_pixels, stream);
-
-	std::chrono::steady_clock::time_point s2 = std::chrono::steady_clock::now();
-	std::cout << "allocation vram en " << std::chrono::duration_cast<std::chrono::milliseconds>(s2 - s1).count() << " ms" << std::endl;
-
-	// call
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-	uint nb_blocks = std::ceil((float)tris.second.y / 256.0f);
-
-	rasterization_kernelV2 <<< nb_blocks, 256 >>> (dv, dt, tris.second.y, img_dim, dimg);
-
-	cudaDeviceSynchronize();
-
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "Rasterisation en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-
-	std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
-	unsigned char* img = new unsigned char[nb_pixels];
-	cudaMemcpy(img, dimg, nb_pixels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-
-	std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
-	std::cout << "copie de l'image gpu -> cpu " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
-
-	CudaCall::saveToBmp(
-		"C:/Users/PC/Desktop/poc/rasterizationV2.bmp",
-		img_dim.x,
-		img_dim.y,
-		img
-	);
-
-	// libération de la mémoire
-	cudaFreeAsync(dv, stream);
-	cudaFreeAsync(dt, stream);
-	cudaFreeAsync(dimg, stream);
-	cudaStreamDestroy(stream);
-
-	delete img;
-}
-
 
 
 __global__ void TileCount(
 	float2* d_vertices,
 	uint3* d_triangles,
+	int nb_vertices,
 	int nb_triangles,
 	Tile* dtiles,
 	int nb_tiles,
-	int tile_size,
-	int nb_side_tiles
+	uint2 tiles_dim,
+	int tile_size
 )
 {
 	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (tri_id < nb_triangles)
+	if (tri_id >= 0 && tri_id < nb_triangles)
 	{
 		float2 tri[3] = {
 			d_vertices[d_triangles[tri_id].x],
@@ -741,20 +256,22 @@ __global__ void TileCount(
 		};
 
 		float4 bb = getTriangleBoundingBox(tri);
-			
+
 		// Calculer la plage de tuiles touchée par la boîte englobante
-		int min_x = fmaxf(0.0f, floorf(bb.x / tile_size));
-		int min_y = fmaxf(0.0f, floorf(bb.y / tile_size));
-		int max_x = fminf((float)nb_side_tiles - 1, floorf(bb.z / tile_size));
-		int max_y = fminf((float)nb_side_tiles - 1, floorf(bb.w / tile_size));
+		int min_x = floorf(bb.x / tile_size);
+		int min_y = floorf(bb.y / tile_size);
+		int max_x = fminf((float)tiles_dim.x - 1, floorf(bb.z / tile_size));
+		int max_y = fminf((float)tiles_dim.y - 1, floorf(bb.w / tile_size));
 
 		for (int x = min_x; x <= max_x; x++) {
 			for (int y = min_y; y <= max_y; y++) {
-				atomicAdd(&dtiles[x * nb_side_tiles + y].count, 1);
+
+				int tile_index = x * tiles_dim.y + y;
+
+				if (tile_index >= 0 && tile_index < nb_tiles)
+					atomicAdd(&dtiles[tile_index].count, 1);
 			}
 		}
-		
-		//if (isTriangleInBoundingBox(tri, dtiles[i].min_pos, dtiles[i].max_pos))
 	}
 }
 
@@ -766,8 +283,8 @@ __global__ void TileAssociate(
 	Tile* dtiles,
 	int nb_tiles,
 	int* d_indices,
-	int tile_size,
-	int nb_side_tiles
+	uint2 tiles_dim,
+	int tile_size
 )
 {
 	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -783,15 +300,21 @@ __global__ void TileAssociate(
 		float4 bb = getTriangleBoundingBox(tri);
 
 		// Calculer la plage de tuiles touchée par la boîte englobante
-		int min_x = fmaxf(0.0f, floorf(bb.x / tile_size));
-		int min_y = fmaxf(0.0f, floorf(bb.y / tile_size));
-		int max_x = fminf((float)nb_side_tiles - 1, floorf(bb.z / tile_size));
-		int max_y = fminf((float)nb_side_tiles - 1, floorf(bb.w / tile_size));
+		int min_x = floorf(bb.x / tile_size);
+		int min_y = floorf(bb.y / tile_size);
+		int max_x = fminf((float)tiles_dim.x - 1, floorf(bb.z / tile_size));
+		int max_y = fminf((float)tiles_dim.y - 1, floorf(bb.w / tile_size));
 
 		for (int x = min_x; x <= max_x; x++) {
 			for (int y = min_y; y <= max_y; y++) {
-				size_t temp_count = atomicAdd(&dtiles[x * nb_side_tiles + y].temp_count, 1);
-				d_indices[dtiles[x * nb_side_tiles + y].offset + temp_count] = tri_id;
+
+				int tile_index = x * tiles_dim.y + y;
+
+				if (tile_index >= 0 && tile_index < nb_tiles)
+				{
+					size_t temp_count = atomicAdd(&dtiles[tile_index].temp_count, 1);
+					d_indices[dtiles[tile_index].offset + temp_count] = tri_id;
+				}
 			}
 		}
 	}
@@ -803,7 +326,7 @@ __global__ void rasterization_kernelV3(
 	uint3* d_triangles,
 	int nb_triangles,
 	Tile* dtiles,
-	int nb_side_tiles,
+	uint2 tiles_dim,
 	int tile_size,
 	int* dindices,
 	uint2 img_dim,
@@ -819,10 +342,10 @@ __global__ void rasterization_kernelV3(
 	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y) return;
 
 	int tile_index = 
-		std::floor((float)thread_x / tile_size) * nb_side_tiles 
+		std::floor((float)thread_x / tile_size) * tiles_dim.y
 		+ std::floor((float)thread_y / tile_size);
 
-	if (tile_index < 0 || tile_index >= (nb_side_tiles * nb_side_tiles)) return;
+	if (tile_index < 0 || tile_index >= (tiles_dim.x * tiles_dim.y)) return;
 
 	Tile tile = dtiles[tile_index];
 	float2 pixel{ thread_x, thread_y };
@@ -881,25 +404,25 @@ __global__ void rasterization_kernelV3(
 
 
 // un groupe de threads par triangle
-void CudaCall::rasterizationV3(
-	std::pair<std::pair<float2*, uint3*>, uint2>& tris,
-	double scale
+unsigned char* CudaCall::rasterization(
+	float2* dv,
+	uint3* dt,
+	uint nb_vertices,
+	uint nb_triangles,
+	double scale,
+	uint2 img_dim
 )
 {
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+
 	// allocation mémoire
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
-
-	uint2 img_dim = { scale, scale };
-	size_t nb_pixels = img_dim.x * img_dim.y;
-
 	int tile_size = 32; // taille en pixel, rapide avec 32, lent avec 256
-	int tile_side = std::ceil((float)std::max(img_dim.x, img_dim.y) / tile_size);
-	int nb_tiles = tile_side * tile_side;
 
-	printf("Nb triangles: %i\n", tris.second.y);
-	printf("tile_side %i\n", tile_side);
-	printf("NB tiles: %i\n", nb_tiles);
+	uint2 tiles_dim;
+	tiles_dim.x = std::ceil((float)img_dim.x / tile_size);
+	tiles_dim.y = std::ceil((float)img_dim.y / tile_size);
+
+	int nb_tiles = tiles_dim.x * tiles_dim.y;
 
 	/// allocation ram
 	Tile* htiles = nullptr;
@@ -907,8 +430,8 @@ void CudaCall::rasterizationV3(
 
 	int tile_index = 0;
 
-	for (int x = 0; x < tile_side; x++)
-		for (int y = 0; y < tile_side; y++)
+	for (int x = 0; x < tiles_dim.x; x++)
+		for (int y = 0; y < tiles_dim.y; y++)
 		{
 			htiles[tile_index].min_pos = { (float)x * tile_size, (float)y * tile_size };
 			htiles[tile_index].max_pos = { (float)(x + 1) * tile_size, (float)(y + 1) * tile_size };
@@ -916,29 +439,19 @@ void CudaCall::rasterizationV3(
 		}
 
 	/// allocation vram
-	float2* dv = nullptr;
-	uint3* dt = nullptr;
-	Tile* dtiles = nullptr;
+	size_t nb_pixels = img_dim.x * img_dim.y;
+
 	unsigned char* dimg = nullptr;
+	cudaMalloc((void**)&dimg, sizeof(unsigned char) * nb_pixels);
+	cudaMemset(dimg, 0, sizeof(unsigned char) * nb_pixels);
 
-	std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
-
-	cudaMallocAsync((void**)&dv, tris.second.x * sizeof(float2), stream);
-	cudaMallocAsync((void**)&dt, tris.second.y * sizeof(uint3), stream);
-	cudaMallocAsync((void**)&dtiles, nb_tiles * sizeof(Tile), stream);
-	cudaMallocAsync((void**)&dimg, sizeof(unsigned char) * nb_pixels, stream);
-
-	cudaMemcpyAsync(dv, tris.first.first, tris.second.x * sizeof(float2), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dt, tris.first.second, tris.second.y * sizeof(uint3), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dtiles, htiles, nb_tiles * sizeof(Tile), cudaMemcpyHostToDevice, stream);
-	cudaMemsetAsync(dimg, 0, sizeof(unsigned char) * nb_pixels, stream);
-
-	std::chrono::steady_clock::time_point s2 = std::chrono::steady_clock::now();
-	std::cout << "Allocation vram en " << std::chrono::duration_cast<std::chrono::milliseconds>(s2 - s1).count() << " ms" << std::endl;
+	Tile* dtiles = nullptr;
+	cudaMalloc((void**)&dtiles, nb_tiles * sizeof(Tile));
+	cudaMemcpy(dtiles, htiles, nb_tiles * sizeof(Tile), cudaMemcpyHostToDevice);
 
 	/// passe 1: calcul du nombre de triangles dans chaque tuile
-	TileCount <<< std::ceil(tris.second.y / 256.0f), 256 >>> 
-		(dv, dt, tris.second.y, dtiles, nb_tiles, tile_size, tile_side);
+	TileCount <<< std::ceil(nb_triangles / 256.0f), 256 >>> 
+		(dv, dt, nb_vertices, nb_triangles, dtiles, nb_tiles, tiles_dim, tile_size);
 	cudaDeviceSynchronize();
 
 	cudaMemcpy(htiles, dtiles, nb_tiles * sizeof(Tile), cudaMemcpyDeviceToHost);
@@ -955,56 +468,44 @@ void CudaCall::rasterizationV3(
 	int* dindices = nullptr;
 	cudaMalloc((void**)&dindices, indices_array_size * sizeof(int));
 	cudaMemset(dindices, -1, indices_array_size * sizeof(int));
-	printf("Nb indices: %i\n", indices_array_size);
-	printf("Passe 1 faite\n");
 
 	/// passe 2: affectation des triangles dans le tableau d'indices global des tuiles
-	TileAssociate <<< std::ceil(tris.second.y / 256.0f), 256 >>> 
-		(dv, dt, tris.second.y, dtiles, nb_tiles, dindices, tile_size, tile_side);
+	TileAssociate <<< std::ceil(nb_triangles / 256.0f), 256 >>> 
+		(dv, dt, nb_triangles, dtiles, nb_tiles, dindices, tiles_dim, tile_size);
 	cudaDeviceSynchronize();
-
-	printf("Passe 2 faite\n");
 
 	/// passe 3: un groupe par tuile, un thread par pixel
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
 	rasterization_kernelV3 
 		<<< dim3(std::ceil(img_dim.x / 16.0f), std::ceil(img_dim.y / 16.0f), 1), dim3(16, 16, 1) >>>
-		(dv, dt, tris.second.y, dtiles, tile_side, tile_size, dindices, img_dim, dimg, indices_array_size);
+		(dv, dt, nb_triangles, dtiles, tiles_dim, tile_size, dindices, img_dim, dimg, indices_array_size);
 
 	cudaDeviceSynchronize();
-
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "Rasterisation en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-	std::cout << "Total en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - s1).count() << " ms" << std::endl;
 
 	std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
 	unsigned char* img = new unsigned char[nb_pixels];
 	cudaMemcpy(img, dimg, nb_pixels * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 
-	std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
-	std::cout << "Copie de l'image gpu -> cpu " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - begin2).count() << " ms" << std::endl;
-
-	CudaCall::saveToBmp(
-		"C:/Users/PC/Desktop/poc/rasterizationV3.bmp",
-		img_dim.x,
-		img_dim.y,
-		img
-	);
-
 	// libération de la mémoire
-	cudaFreeAsync(dv, stream);
-	cudaFreeAsync(dt, stream);
-	cudaFreeAsync(dimg, stream);
-	cudaFreeAsync(dindices, stream);
-	cudaFreeAsync(dtiles, stream);
-	cudaStreamDestroy(stream);
-
+	cudaFree(dimg);
+	cudaFree(dindices);
+	cudaFree(dtiles);
 	cudaFreeHost(htiles);
 
-	delete[] img;
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "! RasterizationV3 (allocations etc...) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+
+	return img;
 }
 
+
+
+__device__ bool isTriangleClockwise(float2 tri[3])
+{
+	int2 vec1{ tri[1].x - tri[0].x, tri[1].y - tri[0].y };
+	int2 vec2{ tri[2].x - tri[0].x, tri[2].y - tri[0].y };
+
+	return vec1.x * vec2.y - vec1.y * vec2.x < 0;
+}
 
 void CudaCall::saveToBmp(const std::string& filename, int width, int height,
 	unsigned char* hostData)

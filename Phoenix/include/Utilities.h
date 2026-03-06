@@ -22,11 +22,7 @@ namespace Utils
     /* Applique la triangulation earcut à une série de liste de polygones earcut */
     std::vector<earcutLayer> EarcutTriangulation(earcutPolys& polys);
 
-    earcutLayer earcutTriangulation(const Library& lib);
-
-    bool isTriangleClockwise(int2 tri[3]);
-    
-    void correctTriangulation(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
+    earcutLayer earcutTriangulation(const Library& lib, const uint&& NB_THREADS);
 
     earcutPoly convertGdstkToEarcutPoly(const gdstk::Polygon* poly);
 

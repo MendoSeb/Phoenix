@@ -1,6 +1,7 @@
 #pragma once
 #include "Utilities.h"
 #include <GdstkUtils.h>
+#include <cudaCall.h>
 
 
 namespace Utils
@@ -84,12 +85,11 @@ namespace Utils
         return { layer };
     }
 
-    earcutLayer earcutTriangulation(const Library& lib)
+    earcutLayer earcutTriangulation(const Library& lib, const uint&& NB_THREADS)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-        const uint NB_THREADS = 10;
-        std::thread threads[NB_THREADS];
+        std::thread* threads = new std::thread[NB_THREADS];
 
         size_t nb_polys = lib.cell_array[0]->polygon_array.count;
         size_t nb_polys_per_thread = nb_polys / NB_THREADS;
@@ -98,6 +98,7 @@ namespace Utils
         triangulation.first.resize(nb_polys);
         triangulation.second.resize(nb_polys);
 
+        /// fonction pour chaque thread
         auto lambda = [&](size_t min_index, size_t max_index)
         {
             // count vertex_number until the min_index polygon
@@ -120,6 +121,7 @@ namespace Utils
             }
         };
 
+        /// lancement des threads
         for (size_t i = 0; i < NB_THREADS; i++)
         {
             size_t min_index = i * nb_polys_per_thread;
@@ -131,11 +133,14 @@ namespace Utils
             threads[i] = std::thread(lambda, min_index, max_index);
         }
 
+        /// attendre que tous les threas aient finis
         for (size_t i = 0; i < NB_THREADS; i++)
             threads[i].join();
 
+        delete[] threads;
+
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "triangulation earcut en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+        std::cout << "! triangulation earcut en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 
         return triangulation;
     }
@@ -159,6 +164,8 @@ namespace Utils
 
     std::pair<std::pair<float2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation)
     {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
         // count vertices and triangles
         size_t nb_vertices = 0;
         size_t nb_triangles = 0;
@@ -171,29 +178,35 @@ namespace Utils
 
         // convert to float2* and uint3*
         nb_triangles /= 3;
+        std::chrono::steady_clock::time_point s1 = std::chrono::steady_clock::now();
 
-        std::pair<float2*, uint3*> tris;
-        cudaMallocHost((void**)&tris.first, nb_vertices * sizeof(float2));
-        cudaMallocHost((void**)&tris.second, nb_triangles * sizeof(uint3));
+        float2* hv = nullptr;
+        uint3* ht = nullptr;
+        cudaMallocHost((void**)&hv, nb_vertices * sizeof(float2));
+        cudaMallocHost((void**)&ht, nb_triangles * sizeof(uint3));
+
+        std::chrono::steady_clock::time_point e1 = std::chrono::steady_clock::now();
+        std::cout << "! allocation memoire sommets et triangles : " << std::chrono::duration_cast<std::chrono::milliseconds>(e1 - s1).count() << " ms" << std::endl;
 
         size_t vertex_index = 0;
         size_t triangle_index = 0;
 
         for (earcutPoly& poly : triangulation.first)
-            for (earcutPoint& point : poly[0])
-            {
-                tris.first[vertex_index].x = point.at(0);
-                tris.first[vertex_index].y = point.at(1);
-                vertex_index++;
-            }
+            for (std::vector<earcutPoint>& poly2 : poly)
+                for (earcutPoint& point : poly2)
+                {
+                    hv[vertex_index].x = point.at(0);
+                    hv[vertex_index].y = point.at(1);
+                    vertex_index++;
+                }
 
         for (std::vector<uint32_t>& indices : triangulation.second)
         {
             for (size_t i = 0; i < indices.size(); i += 3)
             {
-                tris.second[triangle_index].x = indices[i];
-                tris.second[triangle_index].y = indices[i+1];
-                tris.second[triangle_index].z = indices[i+2];
+                ht[triangle_index].x = indices[i];
+                ht[triangle_index].y = indices[i+1];
+                ht[triangle_index].z = indices[i+2];
 
                 triangle_index++;
             }
@@ -201,37 +214,21 @@ namespace Utils
 
         uint2 count{ nb_vertices, nb_triangles };
 
-        printf("conversion triangulation en pointeur faite\n");
-        return { tris, count };
-    }
+        // allocation vram des sommets et triangles
+        float2* dv = nullptr;
+        uint3* dt = nullptr;
+        cudaMalloc((void**)&dv, nb_vertices * sizeof(float2));
+        cudaMalloc((void**)&dt, nb_triangles * sizeof(uint3));
+        cudaMemcpy(dv, hv, nb_vertices * sizeof(float2), cudaMemcpyHostToDevice);
+        cudaMemcpy(dt, ht, nb_triangles * sizeof(uint3), cudaMemcpyHostToDevice);
 
-    bool isTriangleClockwise(int2 tri[3])
-    {
-        int2 vec1 { tri[1].x - tri[0].x, tri[1].y - tri[0].y };
-        int2 vec2 { tri[2].x - tri[0].x, tri[2].y - tri[0].y };
+        cudaFreeHost(hv);
+        cudaFreeHost(ht);
 
-        return vec1.x * vec2.y - vec1.y * vec2.x < 0;
-    }
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "! conversion triangulation en pointeur : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 
-    void correctTriangulation(std::pair<std::pair<float2*, uint3*>, uint2>& tris)
-    {
-        for (size_t i = 0; i < tris.second.y; i++)
-        {
-           int2 tri[3] = {
-               {tris.first.first[tris.first.second[i].x].x, tris.first.first[tris.first.second[i].x].y},
-               {tris.first.first[tris.first.second[i].y].x, tris.first.first[tris.first.second[i].y].y},
-               {tris.first.first[tris.first.second[i].z].x, tris.first.first[tris.first.second[i].z].y}
-            };
-
-            if (!isTriangleClockwise(tri))
-            {
-                uint temp = tris.first.second[i].x;
-                tris.first.second[i].x = tris.first.second[i].y;
-                tris.first.second[i].y = temp;
-            }
-        }
-
-        printf("correction de l'orientation des triangles faite\n");
+        return { {dv, dt}, count };
     }
 
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)

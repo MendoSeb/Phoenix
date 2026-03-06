@@ -642,31 +642,6 @@ void Optix::DMDSimulationV2()
 }
 
 
-void Optix::maxRender()
-{
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/bvh_test3.gds");
-
-	double scale = 10000.0f;
-	GdstkUtils::normalize01(lib, scale);
-
-	earcutLayer triangulation = Utils::earcutTriangulation(lib);
-	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
-	Utils::correctTriangulation(tris);
-
-	Utils::writeObj(
-		"C:/Users/PC/Desktop/poc/test.obj",
-		tris.first.first,
-		tris.first.second,
-		tris.second.x,
-		tris.second.y
-	);
-}
-
-
 void Optix::saveToBmp(const std::string& filename, int width, int height,
 	unsigned char* hostData)
 {

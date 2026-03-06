@@ -29,7 +29,7 @@ namespace GdstkUtils
 
 		ConvertFlexPathsToPolygon(lib);
 
-		std::cout << "Fichier charge en polygones gdstk en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+		std::cout << "! Fichier charge en polygones gdstk en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 		return lib;
 	}
 
@@ -266,8 +266,10 @@ namespace GdstkUtils
 	}
 
 
-	void normalize01(Library& lib, double& scale)
+	void Scaling(Library& lib, double& scale)
 	{
+		auto start = std::chrono::steady_clock::now();
+
 		double min_x = DBL_MAX;
 		double max_x = -DBL_MAX;
 		double min_y = DBL_MAX;
@@ -295,6 +297,10 @@ namespace GdstkUtils
 				p.x = ((p.x - min_x) / max_side_size) * scale;
 				p.y = ((p.y - min_y) / max_side_size) * scale;
 			}
+
+		auto end = std::chrono::steady_clock::now();
+		std::cout << "! Mise a l'echelle en: " 
+			<< std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 	}
 
 

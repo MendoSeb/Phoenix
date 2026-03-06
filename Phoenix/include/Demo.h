@@ -1,6 +1,7 @@
 #pragma once
 #include <GdstkUtils.h>
 #include <mutex>
+#include <vector_types.h>
 
 
 namespace Demo
@@ -51,9 +52,5 @@ namespace Demo
 
 	void rasterisationStep();
 
-	void gpu();
-
-	void gpu2();
-
-	void gpu3();
+	void AltijetRasterization(float2 circuit_inch_size, int dpi);
 }

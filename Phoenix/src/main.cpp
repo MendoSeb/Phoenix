@@ -39,7 +39,9 @@ int main()
 
 	//gpu();
 
-	gpu3();
+	float inch_x = (29.5f * 2.0f) / 2.54f;
+	float inch_y = (16.8f * 4.0f) / 2.54f;
+	AltijetRasterization({inch_x, inch_y}, 100);
 
 	return 0;
 }

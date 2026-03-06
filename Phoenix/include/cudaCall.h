@@ -5,6 +5,18 @@
 #include <fstream>
 
 
+#define CUDA_CHECK(call)                                                      \
+    do {                                                                      \
+        cudaError_t error = call;                                             \
+        if (error != cudaSuccess) {                                           \
+            std::stringstream ss;                                             \
+            ss << "CUDA Error: " << cudaGetErrorString(error) << " in "       \
+               << __FILE__ << " at line " << __LINE__;                        \
+            throw std::runtime_error(ss.str());                               \
+        }                                                                     \
+    } while (0)                                                                \
+
+
 namespace CudaCall
 {
 	#pragma pack(push, 1)
@@ -59,23 +71,27 @@ namespace CudaCall
 	};
 
 
+	struct RasterizationData
+	{
+		float2* dv = nullptr;
+		uint3* dt = nullptr;
+		Tile* dtile = nullptr;
+
+		int nb_vertices = 0;
+		int nb_triangles = 0;
+		uint2 nb_tiles { 0, 0 };
+		uint2 img_dim { 0, 0 };
+	};
+
 	void warping(
-		std::pair<std::pair<float2*, uint3*>, uint2>& tris,
+		float2* dv,
+		uint3* dt,
+		uint nb_vertices,
+		uint nb_triangles,
 		std::vector<Warping::Boxes>& src_dst
 	);
 
-	void rasterization(
-		std::pair<std::pair<float2*, uint3*>, uint2>& tris,
-		std::pair<BVHNode*, int*>& bvh,
-		int& depth,
-		int nb_indices
-	);
-
-	std::pair<std::pair<BVHNode*, int*>, int> bvhV1(std::pair<std::pair<float2*, uint3*>, uint2>& tris, int& depth);
-
-	void rasterizationV2(std::pair<std::pair<float2*, uint3*>, uint2>& tris);
-
-	void rasterizationV3(std::pair<std::pair<float2*, uint3*>, uint2>& tris, double scale);
+	unsigned char* rasterization(float2* dv, uint3* dt, uint nb_vertices, uint nb_triangles, double scale, uint2 img_dim);
 
 	void saveToBmp(const std::string& filename, int width, int height,
 		unsigned char* hostData);
