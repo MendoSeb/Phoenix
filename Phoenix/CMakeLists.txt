@@ -10,9 +10,9 @@ find_package(Boost REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Qhull REQUIRED)
 find_package(CUDAToolkit 12.4 REQUIRED)
-find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(TIFF REQUIRED)
+find_package(Freetype REQUIRED)
 
 # --- Configuration des chemins OptiX ---
 set(OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0")
@@ -83,7 +83,7 @@ target_link_libraries(executable PRIVATE
     CUDA::cuda_driver
     Eigen3::Eigen
     TIFF::TIFF
-    ${OpenCV_LIBS}
+    Freetype::Freetype
 )
 
 # Copie du fichier .optixir à côté de l'exécutable final

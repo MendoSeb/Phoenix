@@ -1,5 +1,4 @@
 #pragma once
-#include <opencv2/opencv.hpp>
 #include <gdstk/library.hpp>
 #include "vector_types.h"
 #include <gdstk/gdstk.hpp>

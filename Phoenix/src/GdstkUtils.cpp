@@ -1,7 +1,6 @@
 #include "GdstkUtils.h"
 #include <iostream>
 #include <__msvc_chrono.hpp>
-#include <opencv2/core/types.hpp>
 
 
 namespace GdstkUtils
@@ -46,35 +45,6 @@ namespace GdstkUtils
 
 		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 		std::cout << "Sauvegarde vers " << fileName << " faite en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
-	}
-
-
-	void SaveToGdsii(std::vector<std::vector<cv::Point2f>>& polys, const char* fileName)
-	{
-		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-		Library lib = {};
-		lib.init("library", 1e-6, 1e-9);
-
-		Cell cell = {};
-		cell.name = copy_string("FIRST", NULL);
-		lib.cell_array.append(&cell);
-
-		for (auto& poly : polys)
-		{
-			Polygon* gdstk_poly = (Polygon*)allocate_clear(sizeof(Polygon));
-
-			for (auto& point : poly)
-				gdstk_poly->point_array.append(Vec2{ point.x, point.y });
-
-			cell.polygon_array.append(gdstk_poly);
-		}
-
-		lib.write_gds(fileName, INT32_MAX, NULL);
-		lib.clear();
-
-		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "Sauvegarde gdsii OpenCV faite en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 	}
 
 

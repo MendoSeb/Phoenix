@@ -150,7 +150,7 @@ private:
             for (std::size_t blockIdx = 0; blockIdx < memoryBlocks.size() && objectsDestroyed < totalObjects;
                  ++blockIdx) {
                 // check if we are in the last block
-                std::size_t objectsInThisBlock = std::min(baseBlockSize, totalObjects - objectsDestroyed);
+                std::size_t objectsInThisBlock = (std::min)(baseBlockSize, totalObjects - objectsDestroyed);
                 for (std::size_t i = 0; i < objectsInThisBlock; ++i) {
                     T* object = memoryBlocks[blockIdx].get() + i;
                     alloc_traits::destroy(alloc, object);

@@ -3,6 +3,7 @@
 #include <GdstkUtils.h>
 #include <Warping.h>
 #include <fstream>
+#include "types.h"
 
 
 #define CUDA_CHECK(call)                                                      \
@@ -42,22 +43,6 @@ namespace CudaCall
 		uint32_t colors_important{ 0 };
 	};
 	#pragma pack(pop)
-
-
-	struct BVHNode
-	{
-		size_t id = (size_t)-1;
-
-		float2 min_pos { FLT_MAX, FLT_MAX };
-		float2 max_pos { FLT_MIN, FLT_MIN };
-
-		size_t offset = (size_t)0;
-		size_t count = (size_t)0;
-		size_t temp_count = (size_t)0;
-		int childs[4] = { -1, -1, -1, -1 };
-
-		bool isLeaf = false;
-	};
 
 
 	struct Tile

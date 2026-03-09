@@ -74,11 +74,11 @@ void Optix::loadObj
 			optix_struct::Vertex v;
 			ss >> v.x >> v.y >> v.z;
 			temp_vertices.push_back(v);
-			x_limit.first = std::min(x_limit.first, v.x);
-			x_limit.second = std::max(x_limit.second, v.x);
+			x_limit.first = min(x_limit.first, v.x);
+			x_limit.second = max(x_limit.second, v.x);
 
-			y_limit.first = std::min(y_limit.first, v.y);
-			y_limit.second = std::max(y_limit.second, v.y);
+			y_limit.first = min(y_limit.first, v.y);
+			y_limit.second = max(y_limit.second, v.y);
 		}
 
 		else if (line_type == "c")

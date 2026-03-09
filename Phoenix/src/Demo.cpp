@@ -1,6 +1,5 @@
 #include "Demo.h"
 #include <BoostUtils.h>
-#include <opencv2/videoio.hpp>
 #include <Clipper2Utils.h>
 #include <Warping.h>
 #include <Utilities.h>
@@ -323,136 +322,6 @@ void Demo::odbDemo()
 }
 
 
-std::vector<double> Demo::findMinMax(cv::Mat& frame, bool text_down)
-{
-	std::vector<double> limits = { 1e10, -1e10, 0 };
-
-	if (text_down)
-		limits[2] = 1e10;
-	else
-		limits[2] = -1e10;
-
-	for (size_t y = 0; y < frame.rows; y++)
-	{
-		for (size_t x = 0; x < frame.cols; x++)
-		{
-			cv::Vec3b pixel = frame.at<cv::Vec3b>(y, x);
-
-			if (pixel[0] > 0)
-			{
-				if (x < limits[0])
-					limits[0] = x;
-
-				if (x > limits[1])
-					limits[1] = x;
-
-				if (text_down)
-				{
-					if (y < limits[2])
-						limits[2] = y;
-				}
-				else
-				{
-					if (y > limits[2])
-						limits[2] = y;
-				}
-			}
-		}
-	}
-
-	return limits;
-}
-
-
-void Demo::video()
-{
-	cv::VideoCapture cap("C:/Users/PC/Desktop/poc/153p_05_22.avi");
-
-	if (!cap.isOpened())
-		std::cout << "Error: Could not open video file." << std::endl;
-	else
-		std::cout << "Video file opened successfully!" << std::endl;
-
-	// Read the first frame to confirm reading
-	const size_t FRAME_NUMBER = cap.get(cv::VideoCaptureProperties::CAP_PROP_FRAME_COUNT);
-	std::cout << FRAME_NUMBER << std::endl;
-
-	int start_index = 32;
-	size_t frame_gap = 36;
-	size_t cam_side = 512;
-	size_t nb_target_x = 17;
-	size_t nb_target_y = 9;
-	size_t nb_total_targets = 153;
-	size_t x = 0;
-	size_t y = 0;
-
-	// 2560 x 832
-	float img_width = std::ceil(2560.0f * (260.0f / 41.0f));
-	float img_height = std::ceil(832.0f * (260.0f / 41.0f));
-
-	float x_offset = (img_width - (17.0f * 512.0f)) / 17.0f;
-	float y_offset = (img_height - (9.0f * 512.0f)) / 9.0f;
-
-	cv::Mat res(
-		img_height,
-		img_width,
-		CV_8UC3,
-		cv::Scalar(0, 0, 0)
-	);
-
-	for (int i = 0; i < start_index; i++)
-		cap.grab();
-
-	for (int i = 0; i < nb_total_targets; i++)
-	{
-		std::cout << "frame index: " << i << std::endl;
-
-		cv::Mat frame;
-		cap.read(frame);
-
-		int offset = 110;
-		cv::Mat cropped = frame(
-			cv::Rect(offset, offset, 512 - 2 * offset, 512 - 2 * offset)
-		);
-
-		std::vector<double> limits = findMinMax(cropped, i < 68);
-
-		int x1 = limits[0];
-		int y1 = limits[2];
-		int w1 = limits[1] - limits[0];
-		int h1 = w1;
-
-		if (i >= 68)
-			y1 = limits[2] - h1;
-
-		cv::Mat cropped2 = cropped(cv::Rect(x1, y1, w1, h1));
-
-		cv::imwrite(
-			("C:/Users/PC/Desktop/poc/targets/" + std::to_string(i) + ".png").c_str(),
-			frame
-		);
-
-		//cv::Rect roi(x, y, frame.cols, frame.rows);
-		//frame.copyTo(res(roi));
-
-		int temp = frame_gap;
-
-		if (i % (nb_target_x * 3) == 0 && i != 0)
-			temp -= 30;
-
-		for (int k = 0; k < temp; k++)
-			cap.grab();
-
-		x = (size_t)(x + cam_side + x_offset) % (size_t)(nb_target_x * (cam_side + x_offset));
-
-		if (x == 0)
-			y += cam_side + y_offset;
-	}
-
-	cv::imwrite("C:/Users/PC/Desktop/poc/res.png", res);
-}
-
-
 void Demo::essaiClient()
 {
 	std::string file1 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/0 - Image Primaire PHC Mire Externe.gds";
@@ -597,11 +466,11 @@ void Demo::AltijetRasterization(float2 circuit_inch_size, int dpi)
 	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
 	printf("Nb triangles: %i\n", tris.second.y);
 
-	//warping(tris.first.first, tris.first.second, tris.second.x, tris.second.y, src_dst_boxes);
+	warping(tris.first.first, tris.first.second, tris.second.x, tris.second.y, src_dst_boxes);
 	unsigned char* img = rasterization(tris.first.first, tris.first.second, 
 		tris.second.x, tris.second.y, scale, img_dim);
 
-	saveToBmp("C:/Users/PC/Desktop/poc/rasterizationV3.bmp", img_dim.x, img_dim.y, img);
+	saveToBmp("C:/Users/PC/Desktop/poc/rasterization.bmp", img_dim.x, img_dim.y, img);
 
 	cudaFree(tris.first.first);
 	cudaFree(tris.first.second);

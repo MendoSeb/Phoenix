@@ -12,6 +12,7 @@
 #include "Optix.h"
 #include "ODB++Parser.h"
 #include "Demo.h"
+#include <FreeType.h>
 
 
 using namespace Demo;
@@ -39,9 +40,12 @@ int main()
 
 	//gpu();
 
-	float inch_x = (29.5f * 2.0f) / 2.54f;
-	float inch_y = (16.8f * 4.0f) / 2.54f;
-	AltijetRasterization({inch_x, inch_y}, 100);
+	//float inch_x = (29.5f * 2.0f) / 2.54f;
+	//float inch_y = (16.8f * 4.0f) / 2.54f;
+	//AltijetRasterization({inch_x, inch_y}, 1200);
 
+	FreeType ft;
+	ft.StringToPolygons("Jurassic Park");
+	
 	return 0;
 }

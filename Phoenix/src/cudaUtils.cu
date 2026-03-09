@@ -4,6 +4,8 @@
 #include "Warping.h"
 #include <tiffio.h>
 #include <device_launch_parameters.h>
+#include <chrono>
+#include <iostream>
 
 
 using namespace CudaCall;
