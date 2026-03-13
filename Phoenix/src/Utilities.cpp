@@ -58,7 +58,7 @@ namespace Utils
         return result;
     }
 
-    std::vector<earcutLayer> EarcutTriangulation(earcutPolys& polys)
+   earcutLayer earcutTriangulation(earcutPolys& polys)
     {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         earcutLayer layer;
@@ -82,7 +82,7 @@ namespace Utils
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         std::cout << "Triangulation earcut faite en " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-        return { layer };
+        return layer;
     }
 
     earcutLayer earcutTriangulation(const Library& lib, const uint&& NB_THREADS)
@@ -214,22 +214,50 @@ namespace Utils
 
         uint2 count{ nb_vertices, nb_triangles };
 
-        // allocation vram des sommets et triangles
-        float2* dv = nullptr;
-        uint3* dt = nullptr;
-        cudaMalloc((void**)&dv, nb_vertices * sizeof(float2));
-        cudaMalloc((void**)&dt, nb_triangles * sizeof(uint3));
-        cudaMemcpy(dv, hv, nb_vertices * sizeof(float2), cudaMemcpyHostToDevice);
-        cudaMemcpy(dt, ht, nb_triangles * sizeof(uint3), cudaMemcpyHostToDevice);
-
-        cudaFreeHost(hv);
-        cudaFreeHost(ht);
-
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        std::cout << "! conversion triangulation en pointeur : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+       // std::cout << "! conversion triangulation en pointeur : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 
-        return { {dv, dt}, count };
+        return { {hv, ht}, count };
     }
+
+
+    void ScaleTriangulation(
+        std::vector<std::pair<std::pair<float2*, uint3*>, uint2>>& triangulation, 
+        float& scale
+    )
+    {
+        float min_x = FLT_MAX;
+        float min_y = FLT_MAX;
+        float max_x = -FLT_MAX;
+        float max_y = -FLT_MAX;
+
+        // find min and max coordinates
+        for (auto& tris_layer : triangulation) {
+            for (int vertice_i = 0; vertice_i < tris_layer.second.x; vertice_i++) 
+            {
+                min_x = std::min(min_x, tris_layer.first.first[vertice_i].x);
+                min_y = std::min(min_y, tris_layer.first.first[vertice_i].y);
+
+                max_x = std::max(max_x, tris_layer.first.first[vertice_i].x);
+                max_y = std::max(max_y, tris_layer.first.first[vertice_i].y);
+            }
+        }
+
+        double max_side_size = std::max(max_x - min_x, max_y - min_y);
+
+        // normalize between (0, 0) and (scale, scale) without modifying scale ratio
+        for (auto& tris_layer : triangulation) {
+            for (int vertice_i = 0; vertice_i < tris_layer.second.x; vertice_i++) 
+            {
+                tris_layer.first.first[vertice_i].x = 
+                    ((tris_layer.first.first[vertice_i].x - min_x) / max_side_size) * scale;
+
+                tris_layer.first.first[vertice_i].y = 
+                    ((tris_layer.first.first[vertice_i].y - min_x) / max_side_size) * scale;
+            }
+        }
+    }
+
 
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
     {
@@ -355,4 +383,57 @@ namespace Utils
 
         printf("sauvegarde en .obj faite\n");
     }
+
+
+    std::vector<earcutPolys> ConvertSVGToEarcutLayers(const char* svg_filepath)
+    {
+        TiXmlDocument doc;
+        doc.LoadFile(svg_filepath);
+
+        TiXmlElement* svg = doc.FirstChildElement("svg");
+        TiXmlElement* g = svg->FirstChildElement("g");
+        TiXmlElement* current_path = g->FirstChildElement("path");
+        std::vector<earcutPolys> polys_layers;
+        std::string last_fill_color = "";
+
+        while (current_path != nullptr)
+        {
+            const char* fill = current_path->Attribute("fill");
+            const char* d = current_path->Attribute("d");
+
+            // adding a new layer if the fill color is different
+            if (fill != last_fill_color)
+            {
+                polys_layers.push_back({});
+                last_fill_color = fill;
+            }
+
+            // load all points from <path> element
+            std::stringstream full_string(d);
+            std::string x_coordinate, y_coordinate;
+            char delimiter = ' ';
+
+            earcutPoly poly;
+            poly.push_back({});
+
+            while (getline(full_string, x_coordinate, delimiter)
+                && getline(full_string, y_coordinate, delimiter))
+            {
+                // remove 'M' or 'L' character from x coordinate
+                x_coordinate = x_coordinate.substr(1, x_coordinate.size() - 1);
+
+                earcutPoint point;
+                point.at(0) = std::stof(x_coordinate);
+                point.at(1) = std::stof(y_coordinate);
+
+                poly[0].push_back(point);
+            }
+
+            polys_layers.back().push_back(poly);
+            current_path = current_path->NextSiblingElement("path");
+        }
+
+        return polys_layers;
+    }
+
 }

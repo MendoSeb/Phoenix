@@ -6,7 +6,7 @@
 #include "Optix.h"
 #include <ODB++Parser.h>
 #include "cudaCall.h"
-
+#include <ImageToPolygons.h>
 
 
 void Demo::boostGeometryDemo()
@@ -412,6 +412,15 @@ void Demo::essaiClientComparison()
 	}
 }
 
+void Demo::ImageToSVG()
+{
+	auto start = std::chrono::steady_clock::now();
+
+	ImageToPolygons::ConvertBMPToPolygons("C:/Users/PC/Desktop/poc/mgi_logo.jpg");
+
+	auto end = std::chrono::steady_clock::now();
+	std::cout << "Image to .gds " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+}
 
 void Demo::rasterisationStep()
 {
@@ -445,14 +454,14 @@ void Demo::rasterisationStep()
 }
 
 
-void Demo::AltijetRasterization(float2 circuit_inch_size, int dpi)
+void Demo::MonoLayerRasterization(float2 circuit_inch_size, int dpi)
 {
 	using namespace CudaCall;
 
 	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
-    //Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/marion/004672-647720058a0.top.gds");
+    Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
+	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/marion/004672-647720058a0.top.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
 	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
 
@@ -477,4 +486,48 @@ void Demo::AltijetRasterization(float2 circuit_inch_size, int dpi)
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	std::cout << "! Total (ouverture jusqu'a liberation memoire) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+}
+
+
+void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
+{	
+	const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
+	std::vector<earcutPolys> polys_layers = Utils::ConvertSVGToEarcutLayers(svg_filepath);
+	std::vector<std::pair<std::pair<float2*, uint3*>, uint2>> triangulations;
+
+	// triangulation every layers
+	for (earcutPolys& polys : polys_layers)
+	{
+		earcutLayer triangulation = Utils::earcutTriangulation(polys);
+		auto heap_tris_layer = Utils::convertEarcutLayerToPointer(triangulation);
+		triangulations.push_back(heap_tris_layer);
+	}
+
+	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
+	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
+
+	// scale triangles for rasterization
+	float scale = std::max(img_dim.x, img_dim.y);
+	Utils::ScaleTriangulation(triangulations, scale);
+
+	// gpu memory allocation of vertices and triangles
+	for (auto& tris_layer : triangulations)
+	{
+		float2* dv = nullptr;
+		uint3* dt = nullptr;
+		cudaMalloc((void**)&dv, tris_layer.second.x * sizeof(float2));
+		cudaMalloc((void**)&dt, tris_layer.second.y * sizeof(uint3));
+		cudaMemcpy(dv, tris_layer.first.first, tris_layer.second.x * sizeof(float2), cudaMemcpyHostToDevice);
+		cudaMemcpy(dt, tris_layer.first.second, tris_layer.second.y * sizeof(uint3), cudaMemcpyHostToDevice);
+
+		// free host memory used for scaling
+		cudaFreeHost(tris_layer.first.first);
+		cudaFreeHost(tris_layer.first.second);
+
+		tris_layer.first.first = dv;
+		tris_layer.first.second = dt;
+	}
+
+	//unsigned char* img = CudaCall::rasterization(tris.first.first, tris.first.second, 
+	//	tris.second.x, tris.second.y, scale, img_dim);
 }

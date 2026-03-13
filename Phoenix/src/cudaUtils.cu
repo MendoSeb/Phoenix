@@ -477,7 +477,7 @@ unsigned char* CudaCall::rasterization(
 	cudaDeviceSynchronize();
 
 	/// passe 3: un groupe par tuile, un thread par pixel
-	rasterization_kernelV3 
+	rasterization_kernelV3
 		<<< dim3(std::ceil(img_dim.x / 16.0f), std::ceil(img_dim.y / 16.0f), 1), dim3(16, 16, 1) >>>
 		(dv, dt, nb_triangles, dtiles, tiles_dim, tile_size, dindices, img_dim, dimg, indices_array_size);
 

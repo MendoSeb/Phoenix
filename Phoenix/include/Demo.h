@@ -35,7 +35,11 @@ namespace Demo
 
 	void essaiClientComparison();
 
+	void ImageToSVG();
+
 	void rasterisationStep();
 
-	void AltijetRasterization(float2 circuit_inch_size, int dpi);
+	void MonoLayerRasterization(float2 circuit_inch_size, int dpi);
+
+	void MultiLayerRasterization(float2 circuit_inch_size, int dpi);
 }

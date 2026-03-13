@@ -13,7 +13,8 @@ FreeType::FreeType()
 		printf("erreur initialisation freetype 1\n");
 
 	error = FT_New_Face(library,
-		"C:/Users/PC/Downloads/jurassic-park/Jurassic_Park.ttf",
+		//"C:/Users/PC/Downloads/jurassic-park/Jurassic_Park.ttf",
+		"C:/Users/PC/Downloads/arial/ArialCEItalic.TTF",
 		0,
 		&face);
 
@@ -25,30 +26,43 @@ FreeType::FreeType()
 
 	error = FT_Set_Pixel_Sizes(
 		face,   /* handle to face object */
-		0,      /* pixel_width           */
-		100);   /* pixel_height          */
+		10,      /* pixel_width           */
+		10);   /* pixel_height          */
 }
 
 
 void FreeType::StringToPolygons(std::string text)
 {
 	PathsD paths;
-	int current_x_offset = 0;
+	PointD char_offset(0, 0);
 
 	for (int i = 0; i < text.size(); i++)
 	{
-		PathsD char_paths = CharacterToPolygons(text[i]);
-		float4 bb = GetPathsBoundingBox(char_paths);
+		char c = text[i];
 
-		for (PathD& path : char_paths)
-			for (PointD& point : path)
-				point.x += current_x_offset;
+		if (c == '\n')
+		{
+			char_offset.x = 0;
+			char_offset.y -= face->size->metrics.height;
+		}
+		else
+		{
+			PathsD char_paths = CharacterToPolygons(c);
 
-		for (PathD& path : char_paths)
-			paths.push_back(path);
+			for (PathD& path : char_paths) {
+				for (PointD& point : path)
+				{
+					point.x += char_offset.x;
+					point.y += char_offset.y;
+				}
+			}
 
-		// advance: "taille de la lettre", bearing: "padding de cette lettre"
-		current_x_offset += face->glyph->advance.x + face->glyph->metrics.horiBearingX;
+			for (PathD& path : char_paths) {
+				paths.push_back(path);
+			}
+
+			char_offset.x += face->glyph->advance.x;
+		}
 	}
 
 	PolyTreeD out;

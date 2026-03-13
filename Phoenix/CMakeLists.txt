@@ -3,7 +3,7 @@
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-project(PhoenixApp LANGUAGES CXX CUDA)
+project(PhoenixApp LANGUAGES CXX C CUDA)
 
 find_package(Clipper2 REQUIRED)
 find_package(Boost REQUIRED)
@@ -13,6 +13,7 @@ find_package(CUDAToolkit 12.4 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(TIFF REQUIRED)
 find_package(Freetype REQUIRED)
+find_package(tinyxml CONFIG REQUIRED)
 
 # --- Configuration des chemins OptiX ---
 set(OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0")
@@ -28,6 +29,7 @@ set(OPTIX_SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/Phoenix.cu")
 set(OPTIX_OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/Phoenix.optixir")
 
 set(cuda_utils "${CMAKE_CURRENT_SOURCE_DIR}/src/cudaUtils.cu")
+set(image_to_poly "${CMAKE_CURRENT_SOURCE_DIR}/src/ImageToPolygons.cu")
 
 # --- Compilation du fichier .cu en .optixir avec NVCC ---
 add_custom_command(
@@ -60,6 +62,7 @@ add_executable(executable
     ${CLIPPER1_SOURCES}
     "${OPTIX_SOURCE_FILE}"
     ${cuda_utils}
+    ${image_to_poly}
 )
 
 add_dependencies(executable GenerateOptiXIR)
@@ -84,6 +87,7 @@ target_link_libraries(executable PRIVATE
     Eigen3::Eigen
     TIFF::TIFF
     Freetype::Freetype
+    unofficial-tinyxml::unofficial-tinyxml
 )
 
 # Copie du fichier .optixir à côté de l'exécutable final
