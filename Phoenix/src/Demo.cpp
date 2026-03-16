@@ -399,14 +399,9 @@ void Demo::rasterisationStep()
 
 void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 {	
-	// 1: trianguler chaque couches de polygones
-	// 2: faire un tableau global de tous les triangles et sommets en deux tableaux en gardant les plages des couches
-	// et un tableau de booléen pour chaque triangle qui indique leur polarité
-	
-	// 3: appeler N fois tileCount et N fois tileAssociate pour remplir dans l'ordre les triangles
-	// 4 appeler une fois rasterzation_kernelV3<<<>>>() et si je touche un triangle je teste sa polarité et je break
+	auto start3 = std::chrono::steady_clock::now();
 
-	/// triangulate every layers
+	/// 1: triangulate every layers
 	const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
 	std::vector<earcutPolys> polys_layers = Utils::ConvertSVGToEarcutLayers(svg_filepath);
 	std::vector<earcutLayer> triangulation_layers;
@@ -421,12 +416,17 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
 	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
 
-	/// scale triangles for rasterization
+	/// 2: scale triangles for rasterization
 	float scale = std::max(img_dim.x, img_dim.y);
 	Utils::ScaleTriangulation(t, scale);
 
-	/// gpu memory allocation of vertices, triangles and the polarity of the triangles
+	/// 3: gpu memory allocation of vertices, triangles and the polarity of the triangles
 	Utils::Triangulation dtriangulation;
+	auto start = std::chrono::steady_clock::now();
+
+	printf("vertices: %f Mo\n", (float)(t.nb_vertices * sizeof(float2)) / 1e6f);
+	printf("triangles: %f Mo\n", (float)(t.nb_triangles * sizeof(uint3)) / 1e6f);
+	printf("polarity: %f Mo\n", (float)(t.nb_triangles * sizeof(unsigned char)) / 1e6f);
 
 	cudaMalloc((void**)&dtriangulation.v, t.nb_vertices * sizeof(float2));
 	cudaMalloc((void**)&dtriangulation.t, t.nb_triangles * sizeof(uint3));
@@ -435,15 +435,29 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	cudaMemcpy(dtriangulation.t, t.t, t.nb_triangles * sizeof(uint3), cudaMemcpyHostToDevice);
 	cudaMemcpy(dtriangulation.p, t.p, t.nb_triangles * sizeof(unsigned char), cudaMemcpyHostToDevice);
 
+	auto end = std::chrono::steady_clock::now();
+	std::cout << "! creation contexte + allocation vram en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+
 	dtriangulation.nb_vertices = t.nb_vertices;
 	dtriangulation.nb_triangles = t.nb_triangles;
 	dtriangulation.layers_range = t.layers_range;
 
-	/// free host memory
-	cudaFreeHost(t.v);
-	cudaFreeHost(t.t);
-	cudaFreeHost(t.p);
+	/// 4: free host memory
+	cudaFree(t.v);
+	cudaFree(t.t);
+	cudaFree(t.p);
 
-	unsigned char* img = CudaCall::rasterization(dtriangulation, scale, img_dim);
+	/// 5: warp and rasterize circuit
+	CudaCall::Warping(dtriangulation, src_dst_boxes);
+	unsigned char* img = CudaCall::Rasterization(dtriangulation, scale, img_dim);
 	CudaCall::saveToBmp("C:/Users/PC/Desktop/poc/rasterization.bmp", img_dim.x, img_dim.y, img);
+
+	/// 6: free vram memory
+	cudaFree(dtriangulation.v);
+	cudaFree(dtriangulation.t);
+	cudaFree(dtriangulation.p);
+
+	auto end3 = std::chrono::steady_clock::now();
+	std::cout << "! Total en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end3 - start3).count() << " ms" << std::endl;
+
 }

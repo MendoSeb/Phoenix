@@ -38,8 +38,8 @@ int main()
 	float inch_y = (16.8f * 4.0f) / 2.54f;
 	MultiLayerRasterization({ inch_x, inch_y }, 1200); */
 
-	float2 circuit_dim{20, 20};
-	int dpi = 100;
+	float2 circuit_dim{10, 10};
+	int dpi = 1200;
 	MultiLayerRasterization(circuit_dim, dpi);
 
 	//FreeType ft;

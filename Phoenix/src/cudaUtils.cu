@@ -64,7 +64,7 @@ __device__ bool isVertexInsideSquareBox(const float2& min, const float2& max, co
 	return vertex.x >= min.x && vertex.x <= max.x && vertex.y >= min.y && vertex.y <= max.y;
 }
 
-__global__ void warping_kernel(
+__global__ void WarpingKernel(
 	float2* vertices,
 	uint3* triangles,
 	uint nb_vertices,
@@ -180,12 +180,9 @@ __device__ bool isTriangleInBoundingBox(float2 tri[3], const float2& min_p, cons
 }
 
 
-void CudaCall::warping
+void CudaCall::Warping
 (
-	float2* dv, 
-	uint3* dt, 
-	uint nb_vertices,
-	uint nb_triangles,
+	Utils::Triangulation dtriangulation,
 	std::vector<Warping::Boxes>& src_dst
 )
 {
@@ -216,11 +213,11 @@ void CudaCall::warping
 
 	// appel
 	size_t nb_threads_per_blocks = 1024;
-	size_t nb_blocks = std::ceil(nb_vertices / 1024);
+	size_t nb_blocks = std::ceil(dtriangulation.nb_vertices / 1024);
 	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
-	std::cout << "Nb vertices = " << nb_vertices << std::endl;
+	std::cout << "Nb vertices = " << dtriangulation.nb_vertices << std::endl;
 
-	warping_kernel <<<nb_blocks, nb_threads_per_blocks>>> (dv, dt, nb_vertices, db, dm);
+	WarpingKernel <<<nb_blocks, nb_threads_per_blocks>>> (dtriangulation.v, dtriangulation.t, dtriangulation.nb_vertices, db, dm);
 
 	cudaDeviceSynchronize();
 	// libération mémoire
@@ -320,7 +317,7 @@ __global__ void TileAssociate(
 }
 
 
-__global__ void rasterization_kernelV3(
+__global__ void RasterizationKernel(
 	Utils::Triangulation dtriangulation,
 	Tile* dtiles,
 	uint2 tiles_dim,
@@ -404,7 +401,7 @@ __global__ void rasterization_kernelV3(
 
 
 // un groupe de threads par triangle
-unsigned char* CudaCall::rasterization(
+unsigned char* CudaCall::Rasterization(
 	Utils::Triangulation& dtriangulation,
 	double scale,
 	uint2 img_dim
@@ -466,7 +463,8 @@ unsigned char* CudaCall::rasterization(
 	cudaMalloc((void**)&dindices, indices_array_size * sizeof(int));
 	cudaMemset(dindices, -1, indices_array_size * sizeof(int));
 
-	/// passe 2: affectation des triangles dans le tableau d'indices global des tuiles
+	/// passe 2: affectation des triangles dans le tableau d'indices global des tuiles.
+	/// remplissage du tableau des indices de triangles couche par couche pour tester les triangles proches en premier
 	for (int i = dtriangulation.layers_range.size() - 1; i >= 0; i--)
 	{
 		int start_index = dtriangulation.layers_range[i].first;
@@ -482,7 +480,7 @@ unsigned char* CudaCall::rasterization(
 	/// passe 3: un groupe par tuile, un thread par pixel
 	std::chrono::steady_clock::time_point start2 = std::chrono::steady_clock::now();
 
-	rasterization_kernelV3
+	RasterizationKernel
 		<<< dim3(std::ceil(img_dim.x / 32.0f), std::ceil(img_dim.y / 32.0f), 1), dim3(32, 32, 1) >>>
 		(dtriangulation, dtiles, tiles_dim, tile_size, dindices, img_dim, dimg, indices_array_size);
 
@@ -502,7 +500,7 @@ unsigned char* CudaCall::rasterization(
 	cudaFreeHost(htiles);
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "! RasterizationV3 (allocations etc...) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+	std::cout << "! Total rasterization (allocations etc...) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 
 	return img;
 }

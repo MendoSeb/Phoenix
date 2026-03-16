@@ -34,9 +34,9 @@ static std::vector<Warping::Boxes> src_dst_boxes =
         float2{10020, 10020},
         float2{10020, 0},
 
-        float2{300, 300},
-        float2{300, 9700},
-        float2{9700, 9700},
-        float2{9700, 300}
+        float2{1000, 1000},
+        float2{1000, 9000},
+        float2{9000, 9000},
+        float2{9000, 1000}
     }
 };

@@ -244,9 +244,14 @@ namespace Utils
         }
 
         /// allocation in RAM
-        cudaMallocHost((void**)&t.v, t.nb_vertices * sizeof(float2));
-        cudaMallocHost((void**)&t.t, t.nb_triangles * sizeof(uint3));
-        cudaMallocHost((void**)&t.p, t.nb_triangles * sizeof(char));
+        auto start = std::chrono::steady_clock::now();
+
+        t.v = new float2[t.nb_vertices * sizeof(float2)];
+        t.t = new uint3[t.nb_triangles * sizeof(uint3)];
+        t.p = new unsigned char[t.nb_triangles * sizeof(unsigned char)];
+
+        auto end2 = std::chrono::steady_clock::now();
+        std::cout << "! allocation ram en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start).count() << " ms" << std::endl;
 
         /// assign values to vertices and triangles and polarity array
         size_t vertex_index = 0;
@@ -449,6 +454,8 @@ namespace Utils
 
     std::vector<earcutPolys> ConvertSVGToEarcutLayers(const char* svg_filepath)
     {
+        auto start = std::chrono::steady_clock::now();
+
         TiXmlDocument doc;
         doc.LoadFile(svg_filepath);
 
@@ -495,6 +502,10 @@ namespace Utils
             polys_layers.back().push_back(poly);
             current_path = current_path->NextSiblingElement("path");
         }
+
+
+        auto end = std::chrono::steady_clock::now();
+        std::cout << "! Conversion SVG -> Polygones earcut: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 
         return polys_layers;
     }

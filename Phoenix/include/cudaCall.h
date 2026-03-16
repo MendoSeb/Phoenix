@@ -70,15 +70,12 @@ namespace CudaCall
 		uint2 img_dim { 0, 0 };
 	};
 
-	void warping(
-		float2* dv,
-		uint3* dt,
-		uint nb_vertices,
-		uint nb_triangles,
+	void Warping(
+		Utils::Triangulation dtriangulation,
 		std::vector<Warping::Boxes>& src_dst
 	);
 
-	unsigned char* rasterization(Utils::Triangulation& dtriangulation, double scale, uint2 img_dim);
+	unsigned char* Rasterization(Utils::Triangulation& dtriangulation, double scale, uint2 img_dim);
 
 	void saveToBmp(const std::string& filename, int width, int height,
 		unsigned char* hostData);
