@@ -1,5 +1,4 @@
 #include "Demo.h"
-#include <BoostUtils.h>
 #include <Clipper2Utils.h>
 #include <Warping.h>
 #include <Utilities.h>
@@ -7,24 +6,6 @@
 #include <ODB++Parser.h>
 #include "cudaCall.h"
 #include <ImageToPolygons.h>
-
-
-void Demo::boostGeometryDemo()
-{
-	double degraissement = -1;
-	std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/boost/";
-
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/simple.gds");
-
-	GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12);
-	GdstkUtils::Normalize(lib, Vec2{ 10, 10 });
-	multi_polygon_t polys = BoostUtils::ConvertGdstkToBoostPolygon(lib);
-
-	multi_polygon_t u_polys = BoostUtils::MakeUnion(polys);
-	BoostUtils::ConvertBoostPolygonToGdstk(u_polys, (root_path + "union.gds").c_str());
-}
 
 
 void Demo::clipper2Demo()
@@ -52,10 +33,6 @@ void Demo::clipper2Demo()
 	/*Clipper2Utils::MakeInverse(u, inverse);
 	Clipper2Utils::ConvertPolyTreeDToGdsiiPath(inverse, inverse_lib);
 	GdstkUtils::SaveToGdsii(inverse_lib, (root_path + "inverse.gds").c_str(), false); */
-
-	// triangulation avec clipper2
-	Clipper2Utils::MakeTriangulationPolyTree(u, clipper2_lib);
-	GdstkUtils::SaveToGdsii(clipper2_lib, (root_path + "union_mono_couche_triangulee.gds").c_str(), false);
 
 	/* std::vector<Library> clipper2_layers = {clipper2_lib};
 	Utils::WriteLibraryToObj(clipper2_layers, (root_path + "triangulation_mono_couche.obj").c_str());
@@ -93,39 +70,6 @@ void Demo::clipper2Demo()
 	Utils::WriteLayersObj(tris, (root_path + "triangulation_multi_couches_earcut.obj").c_str());
 
 	u_lib.free_all();
-}
-
-
-void Demo::gdstkDemo()
-{
-	double degraissement = -0.005;
-	std::string root_path = "C:/Users/PC/Desktop/poc/fichiers_gdsii/gdstk/";
-
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	GdstkUtils::RepeatAndTranslateGdstk(lib, 1, 1, 12, 12); // factor moins grand qu'avec clipper car pas de conversion en intD_t
-	GdstkUtils::Normalize(lib, Vec2{ 10, 10 });
-
-	// scale pour la précision et union
-	Library u_lib = GdstkUtils::MakeUnion(lib);
-	GdstkUtils::SaveToGdsii(u_lib, (root_path + "union_gdstk.gds").c_str(), false);
-	lib.clear();
-
-	// dégraissement
-	Library deg = GdstkUtils::MakeDegraissement(u_lib, degraissement); // -1 pour test
-	GdstkUtils::SaveToGdsii(deg, (root_path + "degraissement_gdstk.gds").c_str(), false);
-
-	// différence
-	Library diff = GdstkUtils::MakeDifference(u_lib, deg);
-	GdstkUtils::SaveToGdsii(diff, (root_path + "difference_gdstk.gds").c_str(), false);
-	diff.clear();
-	deg.clear();
-
-	// triangulation of union in one layer with earcutt
-	std::vector<Library> union_layer = { u_lib };
-	std::vector<earcutLayer> pair = Utils::EarcutTriangulation(union_layer);
-	Utils::WriteLayersObj(pair, (root_path + "triangulation_full.obj").c_str());
-
-	u_lib.clear();
 }
 
 
@@ -453,81 +397,53 @@ void Demo::rasterisationStep()
 
 }
 
-
-void Demo::MonoLayerRasterization(float2 circuit_inch_size, int dpi)
-{
-	using namespace CudaCall;
-
-	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-
-    Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/primaire/union.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/marion/004672-647720058a0.top.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	//Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-
-	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
-	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
-
-	double scale = std::max(img_dim.x, img_dim.y);
-	GdstkUtils::Scaling(lib, scale);
-
-	earcutLayer triangulation = Utils::earcutTriangulation(lib, 20);
-	std::pair<std::pair<float2*, uint3*>, uint2> tris = Utils::convertEarcutLayerToPointer(triangulation);
-	printf("Nb triangles: %i\n", tris.second.y);
-
-	warping(tris.first.first, tris.first.second, tris.second.x, tris.second.y, src_dst_boxes);
-	unsigned char* img = rasterization(tris.first.first, tris.first.second, 
-		tris.second.x, tris.second.y, scale, img_dim);
-
-	saveToBmp("C:/Users/PC/Desktop/poc/rasterization.bmp", img_dim.x, img_dim.y, img);
-
-	cudaFree(tris.first.first);
-	cudaFree(tris.first.second);
-
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "! Total (ouverture jusqu'a liberation memoire) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
-}
-
-
 void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 {	
+	// 1: trianguler chaque couches de polygones
+	// 2: faire un tableau global de tous les triangles et sommets en deux tableaux en gardant les plages des couches
+	// et un tableau de booléen pour chaque triangle qui indique leur polarité
+	
+	// 3: appeler N fois tileCount et N fois tileAssociate pour remplir dans l'ordre les triangles
+	// 4 appeler une fois rasterzation_kernelV3<<<>>>() et si je touche un triangle je teste sa polarité et je break
+
+	/// triangulate every layers
 	const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
 	std::vector<earcutPolys> polys_layers = Utils::ConvertSVGToEarcutLayers(svg_filepath);
-	std::vector<std::pair<std::pair<float2*, uint3*>, uint2>> triangulations;
+	std::vector<earcutLayer> triangulation_layers;
 
-	// triangulation every layers
+	int cpt = 0;
+
 	for (earcutPolys& polys : polys_layers)
-	{
-		earcutLayer triangulation = Utils::earcutTriangulation(polys);
-		auto heap_tris_layer = Utils::convertEarcutLayerToPointer(triangulation);
-		triangulations.push_back(heap_tris_layer);
-	}
+		triangulation_layers.push_back(Utils::earcutTriangulation(polys));
+
+	Utils::Triangulation t = Utils::convertEarcutLayersToPointer(triangulation_layers);
 
 	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
 	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
 
-	// scale triangles for rasterization
+	/// scale triangles for rasterization
 	float scale = std::max(img_dim.x, img_dim.y);
-	Utils::ScaleTriangulation(triangulations, scale);
+	Utils::ScaleTriangulation(t, scale);
 
-	// gpu memory allocation of vertices and triangles
-	for (auto& tris_layer : triangulations)
-	{
-		float2* dv = nullptr;
-		uint3* dt = nullptr;
-		cudaMalloc((void**)&dv, tris_layer.second.x * sizeof(float2));
-		cudaMalloc((void**)&dt, tris_layer.second.y * sizeof(uint3));
-		cudaMemcpy(dv, tris_layer.first.first, tris_layer.second.x * sizeof(float2), cudaMemcpyHostToDevice);
-		cudaMemcpy(dt, tris_layer.first.second, tris_layer.second.y * sizeof(uint3), cudaMemcpyHostToDevice);
+	/// gpu memory allocation of vertices, triangles and the polarity of the triangles
+	Utils::Triangulation dtriangulation;
 
-		// free host memory used for scaling
-		cudaFreeHost(tris_layer.first.first);
-		cudaFreeHost(tris_layer.first.second);
+	cudaMalloc((void**)&dtriangulation.v, t.nb_vertices * sizeof(float2));
+	cudaMalloc((void**)&dtriangulation.t, t.nb_triangles * sizeof(uint3));
+	cudaMalloc((void**)&dtriangulation.p, t.nb_triangles * sizeof(unsigned char));
+	cudaMemcpy(dtriangulation.v, t.v, t.nb_vertices * sizeof(float2), cudaMemcpyHostToDevice);
+	cudaMemcpy(dtriangulation.t, t.t, t.nb_triangles * sizeof(uint3), cudaMemcpyHostToDevice);
+	cudaMemcpy(dtriangulation.p, t.p, t.nb_triangles * sizeof(unsigned char), cudaMemcpyHostToDevice);
 
-		tris_layer.first.first = dv;
-		tris_layer.first.second = dt;
-	}
+	dtriangulation.nb_vertices = t.nb_vertices;
+	dtriangulation.nb_triangles = t.nb_triangles;
+	dtriangulation.layers_range = t.layers_range;
 
-	//unsigned char* img = CudaCall::rasterization(tris.first.first, tris.first.second, 
-	//	tris.second.x, tris.second.y, scale, img_dim);
+	/// free host memory
+	cudaFreeHost(t.v);
+	cudaFreeHost(t.t);
+	cudaFreeHost(t.p);
+
+	unsigned char* img = CudaCall::rasterization(dtriangulation, scale, img_dim);
+	CudaCall::saveToBmp("C:/Users/PC/Desktop/poc/rasterization.bmp", img_dim.x, img_dim.y, img);
 }

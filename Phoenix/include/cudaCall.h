@@ -3,7 +3,7 @@
 #include <GdstkUtils.h>
 #include <Warping.h>
 #include <fstream>
-#include "types.h"
+#include <Utilities.h>
 
 
 #define CUDA_CHECK(call)                                                      \
@@ -20,6 +20,8 @@
 
 namespace CudaCall
 {
+	typedef unsigned int uint;
+
 	#pragma pack(push, 1)
 	struct BitmapFileHeader {
 		uint16_t file_type{ 0x4D42 }; // 'BM'
@@ -76,7 +78,7 @@ namespace CudaCall
 		std::vector<Warping::Boxes>& src_dst
 	);
 
-	unsigned char* rasterization(float2* dv, uint3* dt, uint nb_vertices, uint nb_triangles, double scale, uint2 img_dim);
+	unsigned char* rasterization(Utils::Triangulation& dtriangulation, double scale, uint2 img_dim);
 
 	void saveToBmp(const std::string& filename, int width, int height,
 		unsigned char* hostData);

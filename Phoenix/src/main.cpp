@@ -1,10 +1,5 @@
 #include <stdio.h>
-#include <iostream>
-#include <vector>
-#include <fstream>
-#include <string>  
 
-#include "BoostUtils.h"
 #include "Clipper2Utils.h"
 #include "GdstkUtils.h"
 #include "earcut.hpp"
@@ -14,12 +9,11 @@
 #include "Demo.h"
 #include <FreeType.h>
 
-
 using namespace Demo;
+
 
 int main()
 {
-	//boostGeometryDemo();
 	//clipper2Demo();
 	//gdstkDemo();
 
@@ -40,10 +34,13 @@ int main()
 
 	//gpu();
 
-	float inch_x = (29.5f * 2.0f) / 2.54f;
+	/*float inch_x = (29.5f * 2.0f) / 2.54f; // pour le circuit 58a0 je crois
 	float inch_y = (16.8f * 4.0f) / 2.54f;
-	MonoLayerRasterization({inch_x, inch_y}, 1200);
-	//MultiLayerRasterization({ inch_x, inch_y }, 100);
+	MultiLayerRasterization({ inch_x, inch_y }, 1200); */
+
+	float2 circuit_dim{20, 20};
+	int dpi = 100;
+	MultiLayerRasterization(circuit_dim, dpi);
 
 	//FreeType ft;
 	//ft.StringToPolygons("MGI test\nenorme");

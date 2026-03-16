@@ -216,7 +216,7 @@ void CudaCall::warping
 
 	// appel
 	size_t nb_threads_per_blocks = 1024;
-	size_t nb_blocks = std::floor(nb_vertices / 1024);
+	size_t nb_blocks = std::ceil(nb_vertices / 1024);
 	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
 	std::cout << "Nb vertices = " << nb_vertices << std::endl;
 
@@ -237,10 +237,7 @@ void CudaCall::warping
 
 
 __global__ void TileCount(
-	float2* d_vertices,
-	uint3* d_triangles,
-	int nb_vertices,
-	int nb_triangles,
+	Utils::Triangulation dtriangulation,
 	Tile* dtiles,
 	int nb_tiles,
 	uint2 tiles_dim,
@@ -249,12 +246,12 @@ __global__ void TileCount(
 {
 	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (tri_id >= 0 && tri_id < nb_triangles)
+	if (tri_id >= 0 && tri_id < dtriangulation.nb_triangles)
 	{
 		float2 tri[3] = {
-			d_vertices[d_triangles[tri_id].x],
-			d_vertices[d_triangles[tri_id].y],
-			d_vertices[d_triangles[tri_id].z]
+			dtriangulation.v[dtriangulation.t[tri_id].x],
+			dtriangulation.v[dtriangulation.t[tri_id].y],
+			dtriangulation.v[dtriangulation.t[tri_id].z]
 		};
 
 		float4 bb = getTriangleBoundingBox(tri);
@@ -279,24 +276,24 @@ __global__ void TileCount(
 
 
 __global__ void TileAssociate(
-	float2* d_vertices,
-	uint3* d_triangles,
-	int nb_triangles,
+	Utils::Triangulation dtriangulation,
 	Tile* dtiles,
 	int nb_tiles,
 	int* d_indices,
 	uint2 tiles_dim,
-	int tile_size
+	int tile_size,
+	int layer_range_start,
+	int layer_range_end
 )
 {
-	int tri_id = blockIdx.x * blockDim.x + threadIdx.x;
+	int tri_id = blockIdx.x * blockDim.x + threadIdx.x + layer_range_start;
 
-	if (tri_id >= 0 && tri_id < nb_triangles)
+	if (tri_id >= layer_range_start && tri_id < layer_range_end)
 	{
 		float2 tri[3] = {
-			d_vertices[d_triangles[tri_id].x],
-			d_vertices[d_triangles[tri_id].y],
-			d_vertices[d_triangles[tri_id].z]
+			dtriangulation.v[dtriangulation.t[tri_id].x],
+			dtriangulation.v[dtriangulation.t[tri_id].y],
+			dtriangulation.v[dtriangulation.t[tri_id].z]
 		};
 
 		float4 bb = getTriangleBoundingBox(tri);
@@ -324,9 +321,7 @@ __global__ void TileAssociate(
 
 
 __global__ void rasterization_kernelV3(
-	float2* d_vertices,
-	uint3* d_triangles,
-	int nb_triangles,
+	Utils::Triangulation dtriangulation,
 	Tile* dtiles,
 	uint2 tiles_dim,
 	int tile_size,
@@ -356,9 +351,10 @@ __global__ void rasterization_kernelV3(
 	bool pixel_hit = false; // does the pixel touch a triangle?
 
 	// triangles en memoire partagée
-	const uint chunk_size = 256;
+	const uint chunk_size = 1024;
 	int nb_chunk = std::ceil((float)tile.count / (float)chunk_size);
 	__shared__ float2 triangles[chunk_size * 3];
+	__shared__ unsigned char triangles_polarity[chunk_size];
 
 	for (int i = 0; i < nb_chunk; i++)
 	{
@@ -368,9 +364,11 @@ __global__ void rasterization_kernelV3(
 		{
 			int tri_id = dindices[index];
 
-			triangles[thread_local_id * 3] = d_vertices[d_triangles[tri_id].x];
-			triangles[thread_local_id * 3 + 1] = d_vertices[d_triangles[tri_id].y];
-			triangles[thread_local_id * 3 + 2] = d_vertices[d_triangles[tri_id].z];
+			triangles[thread_local_id * 3] = dtriangulation.v[dtriangulation.t[tri_id].x];
+			triangles[thread_local_id * 3 + 1] = dtriangulation.v[dtriangulation.t[tri_id].y];
+			triangles[thread_local_id * 3 + 2] = dtriangulation.v[dtriangulation.t[tri_id].z];
+
+			triangles_polarity[thread_local_id] = dtriangulation.p[tri_id];
 		}
 
 		__syncthreads();
@@ -393,7 +391,7 @@ __global__ void rasterization_kernelV3(
 
 				if (checkPointInTriangleFast(pixel, tri))
 				{
-					img[pixel_index] = 255;
+					img[pixel_index] = (triangles_polarity[k] == 0) ? 0 : 255;
 					pixel_hit = true;
 					break;
 				}
@@ -407,10 +405,7 @@ __global__ void rasterization_kernelV3(
 
 // un groupe de threads par triangle
 unsigned char* CudaCall::rasterization(
-	float2* dv,
-	uint3* dt,
-	uint nb_vertices,
-	uint nb_triangles,
+	Utils::Triangulation& dtriangulation,
 	double scale,
 	uint2 img_dim
 )
@@ -425,6 +420,7 @@ unsigned char* CudaCall::rasterization(
 	tiles_dim.y = std::ceil((float)img_dim.y / tile_size);
 
 	int nb_tiles = tiles_dim.x * tiles_dim.y;
+	printf("nb tiles: %i\nnb_triangles: %i\n", nb_tiles, dtriangulation.nb_triangles);
 
 	/// allocation ram
 	Tile* htiles = nullptr;
@@ -445,15 +441,14 @@ unsigned char* CudaCall::rasterization(
 
 	unsigned char* dimg = nullptr;
 	cudaMalloc((void**)&dimg, sizeof(unsigned char) * nb_pixels);
-	cudaMemset(dimg, 0, sizeof(unsigned char) * nb_pixels);
+	cudaMemset(dimg, 100, sizeof(unsigned char) * nb_pixels);
 
 	Tile* dtiles = nullptr;
 	cudaMalloc((void**)&dtiles, nb_tiles * sizeof(Tile));
 	cudaMemcpy(dtiles, htiles, nb_tiles * sizeof(Tile), cudaMemcpyHostToDevice);
 
 	/// passe 1: calcul du nombre de triangles dans chaque tuile
-	TileCount <<< std::ceil(nb_triangles / 256.0f), 256 >>> 
-		(dv, dt, nb_vertices, nb_triangles, dtiles, nb_tiles, tiles_dim, tile_size);
+	TileCount <<< std::ceil(dtriangulation.nb_triangles / 1024.0f), 1024 >>> (dtriangulation, dtiles, nb_tiles, tiles_dim, tile_size);
 	cudaDeviceSynchronize();
 
 	cudaMemcpy(htiles, dtiles, nb_tiles * sizeof(Tile), cudaMemcpyDeviceToHost);
@@ -472,16 +467,29 @@ unsigned char* CudaCall::rasterization(
 	cudaMemset(dindices, -1, indices_array_size * sizeof(int));
 
 	/// passe 2: affectation des triangles dans le tableau d'indices global des tuiles
-	TileAssociate <<< std::ceil(nb_triangles / 256.0f), 256 >>> 
-		(dv, dt, nb_triangles, dtiles, nb_tiles, dindices, tiles_dim, tile_size);
-	cudaDeviceSynchronize();
+	for (int i = dtriangulation.layers_range.size() - 1; i >= 0; i--)
+	{
+		int start_index = dtriangulation.layers_range[i].first;
+		int end_index = dtriangulation.layers_range[i].second;
+		int nb_blocks = std::ceil((end_index - start_index) / 1024.0f);
+
+		TileAssociate <<< nb_blocks, 1024 >>>
+			(dtriangulation, dtiles, nb_tiles, dindices, tiles_dim, tile_size, start_index, end_index);
+
+		cudaDeviceSynchronize();
+	}
 
 	/// passe 3: un groupe par tuile, un thread par pixel
+	std::chrono::steady_clock::time_point start2 = std::chrono::steady_clock::now();
+
 	rasterization_kernelV3
-		<<< dim3(std::ceil(img_dim.x / 16.0f), std::ceil(img_dim.y / 16.0f), 1), dim3(16, 16, 1) >>>
-		(dv, dt, nb_triangles, dtiles, tiles_dim, tile_size, dindices, img_dim, dimg, indices_array_size);
+		<<< dim3(std::ceil(img_dim.x / 32.0f), std::ceil(img_dim.y / 32.0f), 1), dim3(32, 32, 1) >>>
+		(dtriangulation, dtiles, tiles_dim, tile_size, dindices, img_dim, dimg, indices_array_size);
 
 	cudaDeviceSynchronize();
+
+	std::chrono::steady_clock::time_point end2 = std::chrono::steady_clock::now();
+	std::cout << "! rasterisation seule en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start2).count() << " ms" << std::endl;
 
 	std::chrono::steady_clock::time_point begin2 = std::chrono::steady_clock::now();
 	unsigned char* img = new unsigned char[nb_pixels];
@@ -531,9 +539,9 @@ void CudaCall::saveToBmp(const std::string& filename, int width, int height,
 
 	std::vector<char> palette(palette_size);
 	for (int i = 0; i < 256; ++i) {
-		palette[i * 4 + 0] = 255 - i; // Blue
-		palette[i * 4 + 1] = 255 - i; // Green
-		palette[i * 4 + 2] = 255 - i; // Red
+		palette[i * 4 + 0] = i; // Blue
+		palette[i * 4 + 1] = i; // Green
+		palette[i * 4 + 2] = i; // Red
 		palette[i * 4 + 3] = 0;  // Reserved
 	}
 

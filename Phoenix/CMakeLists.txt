@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(PhoenixApp LANGUAGES CXX C CUDA)
 
 find_package(Clipper2 REQUIRED)
-find_package(Boost REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Qhull REQUIRED)
 find_package(CUDAToolkit 12.4 REQUIRED)
@@ -29,7 +28,6 @@ set(OPTIX_SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/Phoenix.cu")
 set(OPTIX_OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/Phoenix.optixir")
 
 set(cuda_utils "${CMAKE_CURRENT_SOURCE_DIR}/src/cudaUtils.cu")
-set(image_to_poly "${CMAKE_CURRENT_SOURCE_DIR}/src/ImageToPolygons.cu")
 
 # --- Compilation du fichier .cu en .optixir avec NVCC ---
 add_custom_command(
@@ -62,7 +60,6 @@ add_executable(executable
     ${CLIPPER1_SOURCES}
     "${OPTIX_SOURCE_FILE}"
     ${cuda_utils}
-    ${image_to_poly}
 )
 
 add_dependencies(executable GenerateOptiXIR)
@@ -79,7 +76,6 @@ target_include_directories(executable PRIVATE
 
 target_link_libraries(executable PRIVATE 
     Clipper2::Clipper2
-    Boost::boost
     ZLIB::ZLIB
     Qhull::qhull_r
     CUDA::cudart

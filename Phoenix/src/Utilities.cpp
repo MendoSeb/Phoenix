@@ -183,10 +183,13 @@ namespace Utils
         float2* hv = nullptr;
         uint3* ht = nullptr;
         cudaMallocHost((void**)&hv, nb_vertices * sizeof(float2));
+        std::chrono::steady_clock::time_point e2 = std::chrono::steady_clock::now();
+
         cudaMallocHost((void**)&ht, nb_triangles * sizeof(uint3));
 
         std::chrono::steady_clock::time_point e1 = std::chrono::steady_clock::now();
-        std::cout << "! allocation memoire sommets et triangles : " << std::chrono::duration_cast<std::chrono::milliseconds>(e1 - s1).count() << " ms" << std::endl;
+        std::cout << "! allocation memoire sommets : " << std::chrono::duration_cast<std::chrono::milliseconds>(e2 - s1).count() << " ms" << std::endl;
+        std::cout << "! allocation memoire triangles : " << std::chrono::duration_cast<std::chrono::milliseconds>(e1 - e2).count() << " ms" << std::endl;
 
         size_t vertex_index = 0;
         size_t triangle_index = 0;
@@ -220,9 +223,74 @@ namespace Utils
         return { {hv, ht}, count };
     }
 
+    Triangulation convertEarcutLayersToPointer(std::vector<earcutLayer>& triangulation_layers)
+    {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        /// count vertices and triangles
+        Triangulation t;
+
+        for (earcutLayer& layer : triangulation_layers)
+        {
+            size_t previous_nb_triangles = t.nb_triangles;
+
+            for (earcutPoly& poly : layer.first)
+                t.nb_vertices += poly[0].size();
+
+            for (std::vector<uint32_t>& indices : layer.second)
+                t.nb_triangles += indices.size() / 3;
+
+            t.layers_range.push_back( {previous_nb_triangles, t.nb_triangles} );
+        }
+
+        /// allocation in RAM
+        cudaMallocHost((void**)&t.v, t.nb_vertices * sizeof(float2));
+        cudaMallocHost((void**)&t.t, t.nb_triangles * sizeof(uint3));
+        cudaMallocHost((void**)&t.p, t.nb_triangles * sizeof(char));
+
+        /// assign values to vertices and triangles and polarity array
+        size_t vertex_index = 0;
+        size_t triangle_index = 0;
+        size_t indices_count = 0;
+
+        for (earcutLayer& layer : triangulation_layers)
+            for (earcutPoly& poly : layer.first)
+                for (std::vector<earcutPoint>& poly2 : poly)
+                    for (earcutPoint& point : poly2)
+                    {
+                        t.v[vertex_index].x = point.at(0);
+                        t.v[vertex_index].y = point.at(1);
+                        vertex_index++;
+                    }
+
+        for (int i = 0; i < triangulation_layers.size(); i++)
+        {
+            for (std::vector<uint32_t>& indices : triangulation_layers[i].second)
+            {
+                for (size_t k = 0; k < indices.size(); k += 3)
+                {
+                    t.t[triangle_index].x = indices_count + indices[k];
+                    t.t[triangle_index].y = indices_count + indices[k + 1];
+                    t.t[triangle_index].z = indices_count + indices[k + 2];
+
+                    t.p[triangle_index] = !((i % 2) == 0);
+                    triangle_index++;
+                }
+            }
+
+            // pour l'offset des indices des sommets des triangles
+            for (earcutPoly& poly : triangulation_layers[i].first)
+                indices_count += poly[0].size();
+        }
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        std::cout << "! Conversion triangulation en pointeur : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+
+        return t;
+    }
 
     void ScaleTriangulation(
-        std::vector<std::pair<std::pair<float2*, uint3*>, uint2>>& triangulation, 
+        Utils::Triangulation& triangulation, 
         float& scale
     )
     {
@@ -232,32 +300,27 @@ namespace Utils
         float max_y = -FLT_MAX;
 
         // find min and max coordinates
-        for (auto& tris_layer : triangulation) {
-            for (int vertice_i = 0; vertice_i < tris_layer.second.x; vertice_i++) 
-            {
-                min_x = std::min(min_x, tris_layer.first.first[vertice_i].x);
-                min_y = std::min(min_y, tris_layer.first.first[vertice_i].y);
+        for (int vertice_i = 0; vertice_i < triangulation.nb_vertices; vertice_i++) 
+        {
+            min_x = std::min(min_x, triangulation.v[vertice_i].x);
+            min_y = std::min(min_y, triangulation.v[vertice_i].y);
 
-                max_x = std::max(max_x, tris_layer.first.first[vertice_i].x);
-                max_y = std::max(max_y, tris_layer.first.first[vertice_i].y);
-            }
+            max_x = std::max(max_x, triangulation.v[vertice_i].x);
+            max_y = std::max(max_y, triangulation.v[vertice_i].y);
         }
 
         double max_side_size = std::max(max_x - min_x, max_y - min_y);
 
         // normalize between (0, 0) and (scale, scale) without modifying scale ratio
-        for (auto& tris_layer : triangulation) {
-            for (int vertice_i = 0; vertice_i < tris_layer.second.x; vertice_i++) 
-            {
-                tris_layer.first.first[vertice_i].x = 
-                    ((tris_layer.first.first[vertice_i].x - min_x) / max_side_size) * scale;
+        for (int vertice_i = 0; vertice_i < triangulation.nb_vertices; vertice_i++)
+        {
+            triangulation.v[vertice_i].x =
+                ((triangulation.v[vertice_i].x - min_x) / max_side_size) * scale;
 
-                tris_layer.first.first[vertice_i].y = 
-                    ((tris_layer.first.first[vertice_i].y - min_x) / max_side_size) * scale;
-            }
+            triangulation.v[vertice_i].y =
+                ((triangulation.v[vertice_i].y - min_x) / max_side_size) * scale;
         }
     }
-
 
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
     {
@@ -384,7 +447,6 @@ namespace Utils
         printf("sauvegarde en .obj faite\n");
     }
 
-
     std::vector<earcutPolys> ConvertSVGToEarcutLayers(const char* svg_filepath)
     {
         TiXmlDocument doc;
@@ -429,11 +491,11 @@ namespace Utils
                 poly[0].push_back(point);
             }
 
+            poly[0].pop_back();
             polys_layers.back().push_back(poly);
             current_path = current_path->NextSiblingElement("path");
         }
 
         return polys_layers;
     }
-
-}
+};

@@ -37,15 +37,6 @@ namespace GdstkUtils
 	// Divise les polygones ayant plus de 8190 sommets (pour la triangulation et le warning)
 	void MakeFracture(Library& lib, uint64_t&& max_points = 8190);
 
-	// Applique l'union aux polygones de type gdstk
-	Library MakeUnion(Library& lib);
-
-	// Applique le dégraissement aux polygones de type gdstk
-	Library MakeDegraissement(Library lib, double dist);
-
-	// Applique la différence entre deux listes de polygones de type gdstk: (lib1 - lib2)
-	Library MakeDifference(Library& lib1, Library& lib2);
-
 	// Multiplie les points par "scale"
 	void Scale(Library& lib, double scale);
 

@@ -9,14 +9,25 @@
 #include <earcut.hpp>
 #include <GdstkUtils.h>
 #include <Clipper2Utils.h>
-#include <BoostUtils.h>
 #include <vector_functions.h>
-#include "types.h"
 #include "tinyxml.h"
+
+
+typedef unsigned int uint;
 
 
 namespace Utils
 {
+    struct Triangulation
+    {
+        float2* v = nullptr;
+        uint3* t = nullptr;
+        unsigned char* p = nullptr;
+        size_t nb_vertices = 0;
+        size_t nb_triangles = 0;
+        std::vector<std::pair<int, int>> layers_range;
+    };
+
     /* Applique la triangulation earcut à une série de liste de polygones de type gdstk */
     std::vector<earcutLayer> EarcutTriangulation(std::vector<Library>& layers);
 
@@ -27,9 +38,13 @@ namespace Utils
 
     earcutPoly convertGdstkToEarcutPoly(const gdstk::Polygon* poly);
 
+    // convertit une seule couche de triangles en allocation dans le tas
     std::pair<std::pair<float2*, uint3*>, uint2> convertEarcutLayerToPointer(earcutLayer& triangulation);
 
-    void ScaleTriangulation(std::vector<std::pair<std::pair<float2*, uint3*>, uint2>>& triangulation, float& scale);
+    // convertit N couches de triangles en allocation dans le tas en un tableau
+    Triangulation convertEarcutLayersToPointer(std::vector<earcutLayer>& triangulation_layers);
+
+    void ScaleTriangulation(Utils::Triangulation& triangulation, float& scale);
 
     /* Sauvegarde des séries de liste de polygones de type earcut en .obj */
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename);

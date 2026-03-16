@@ -264,28 +264,6 @@ namespace Clipper2Utils
 	}
 
 
-	void TriangulateWithoutUnion()
-	{
-		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
-		Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-		//Library lib1 = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/0 - Image Solder PHC.gds");
-		GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 12, 12);
-		//GdstkUtils::RepeatAndTranslateGdstk(lib1, 4, 3, 300000, 300000);
-		GdstkUtils::Normalize(lib1, Vec2{10, 10});
-		PathsD paths = Clipper2Utils::ConvertGdstkPolygonsToPathsD(lib1);
-
-		Library lib = {};
-		Clipper2Utils::MakeTriangulationPaths(paths, lib);
-
-		std::vector<Library> layers = { lib };
-		Utils::WriteLibraryToObj(layers, "C:/Users/PC/Desktop/poc/fichiers_gdsii/clipper2/solder/triangulation_clipper2_monocouche_v2.obj");
-
-		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "Triangulation monocouche V2 (sans union) en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-	}
-
-
 	void MakeUnion(const PathsD& polys, PolyTreeD& output)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -446,41 +424,6 @@ namespace Clipper2Utils
 
 		return output;
 	}
-
-
-	void MakeTriangulationPolyTree(const PolyTreeD& tree, Library& output)
-	{
-		printf("\nTriangulation Clipper2\n");
-		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		PathsD input = PolyTreeToPathsD(tree);
-		PathsD paths_output;
-
-		//Triangulate(input, paths_output, false);
-		output = ConvertPathsDToGdsii(paths_output);
-
-		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		std::cout << "Triangulation faite: " << paths_output.size() << " en: "
-			<< std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << std::endl;
-	}
-
-
-	void MakeTriangulationPaths(PathsD& paths, Library& output)
-	{
-		PathsD final;
-
-		for (PathD& path : paths)
-		{
-			PathsD path_output;
-			PathsD temp;
-			temp.push_back(path);
-
-			//Triangulate(temp, path_output, true);
-			final.insert(final.end(), path_output.begin(), path_output.end());
-		}
-
-		output = ConvertPathsDToGdsii(final);
-	}
-
 
 	void essaiClientComparison();
 }

@@ -2,7 +2,6 @@
 
 #include <gdstk/gdstk.hpp>
 #include "clipper2/clipper.h"
-#include "clipper.triangulation.h"
 #include <thread>
 #include <mutex>
 #include "GdstkUtils.h"
@@ -49,9 +48,6 @@ namespace Clipper2Utils
 
 
 	/// OPERATIONS SUR LES POLYGONES ///
-	/* Triangule les polygones chargés avec gdstk sans faire d'union (pour garder des triangulations simples) */
-	void TriangulateWithoutUnion();
-
 	// Union d'un Clipper2::PathsD et retourne un Clipper2::PolyTreeD
 	void MakeUnion(const PathsD& polys, PolyTreeD& output);
 
@@ -78,10 +74,4 @@ namespace Clipper2Utils
 
 	// Transforme les positions y des points en -y (inversion par rapport à 0)
 	std::unique_ptr<PolyTreeD> MakeMirrorY(const std::unique_ptr<PolyTreeD>& input);
-
-	// Triangule les polygones d'un PolyTreeD
-	void MakeTriangulationPolyTree(const PolyTreeD& tree, Library& output);
-
-	// Triangule les polygones d'un PathsD
-	void MakeTriangulationPaths(PathsD& paths, Library& output);
 };
