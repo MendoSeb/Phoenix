@@ -14,7 +14,7 @@ FreeType::FreeType()
 
 	error = FT_New_Face(library,
 		//"C:/Users/PC/Downloads/jurassic-park/Jurassic_Park.ttf",
-		"C:/Users/PC/Downloads/arial/ArialCEItalic.TTF",
+		"C:/Users/PC/Downloads/arial/ARIAL.TTF",
 		0,
 		&face);
 
@@ -26,7 +26,7 @@ FreeType::FreeType()
 
 	error = FT_Set_Pixel_Sizes(
 		face,   /* handle to face object */
-		10,      /* pixel_width           */
+		0,      /* pixel_width           */
 		10);   /* pixel_height          */
 }
 
@@ -81,7 +81,7 @@ PathsD FreeType::CharacterToPolygons(const char c)
 	FT_Error error = FT_Load_Glyph(
 		face,          /* handle to face object */
 		glyph_index,   /* glyph index           */
-		FT_LOAD_DEFAULT);  /* load flags, see below */
+		FT_LOAD_NO_HINTING); // poiur indiquer de ne pas placer les points par rapport aux pixels
 
 	// functions for decomposition
 	FT_Outline_Funcs funcs;
@@ -98,29 +98,6 @@ PathsD FreeType::CharacterToPolygons(const char c)
 
 	return paths;
 }
-
-
-float4 FreeType::GetPathsBoundingBox(const PathsD& paths)
-{
-	float4 min_max;
-	min_max.x = INT_MAX;
-	min_max.y = INT_MAX;
-	min_max.z = INT_MIN;
-	min_max.w = INT_MIN;
-
-	for (const PathD& path : paths)
-		for (const PointD& point : path)
-		{
-			min_max.x = std::min(min_max.x, (float)std::min(point.x, point.y));
-			min_max.y = std::min(min_max.y, (float)std::min(point.x, point.y));
-
-			min_max.z = std::max(min_max.z, (float)std::max(point.x, point.y));
-			min_max.w = std::max(min_max.w, (float)std::max(point.x, point.y));
-		}
-
-	return min_max;
-}
-
 
 int FreeType::MoveTo(const FT_Vector* to, void* poly)
 {
@@ -146,18 +123,19 @@ int FreeType::LineTo(const FT_Vector* to, void* poly)
 
 int FreeType::ConicTo(const FT_Vector* control, const FT_Vector* to, void* poly)
 {
+	//printf("In degree two bezier curve\n");
 	PathD* path = &static_cast<PathsD*>(poly)->back();
 
 	PointD p0 = path->back();
-	PointD p1 {control->x, control->y};
-	PointD p2{ to->x, to->y };
+	PointD p1 { control->x, control->y };
+	PointD p2 { to->x, to->y };
 	float t_step = 0.05f;
 
 	for (float t = t_step; t <= 1.0f; t += t_step)
 	{
 		PointD temp;
-		temp.x = p1.x + std::pow(1.0f - t, 2) * (p0.x - p1.x) + t*t * (p2.x - p1.x);
-		temp.y = p1.y + std::pow(1.0f - t, 2) * (p0.y - p1.y) + t*t * (p2.y - p1.y);
+		temp.x = p0.x * std::pow(1.0f - t, 2) + 2.0f * (1.0f - t) * t * p1.x + t*t*p2.x;
+		temp.y = p0.y * std::pow(1.0f - t, 2) + 2.0f * (1.0f - t) * t * p1.y + t*t*p2.y;
 		path->push_back(temp);
 	}
 
@@ -167,6 +145,7 @@ int FreeType::ConicTo(const FT_Vector* control, const FT_Vector* to, void* poly)
 
 int FreeType::CubicTo(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* poly)
 {
+	//printf("In degree three bezier curve\n");
 	PathD* path = &static_cast<PathsD*>(poly)->back();
 
 	PointD p0 = path->back();

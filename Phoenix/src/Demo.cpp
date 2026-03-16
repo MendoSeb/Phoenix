@@ -72,7 +72,6 @@ void Demo::clipper2Demo()
 	u_lib.free_all();
 }
 
-
 void Demo::optixDemo()
 {
 	Optix o(10000, 10000); // 4096, 2176
@@ -265,7 +264,6 @@ void Demo::odbDemo()
 	GdstkUtils::SaveToGdsii(u_lib, "C:/Users/PC/Desktop/poc/fichiers_gdsii/odb/test.gds", false);*/
 }
 
-
 void Demo::essaiClient()
 {
 	std::string file1 = "C:/Users/PC/Desktop/poc/fichiers_gdsii/essai_client/0 - Image Primaire PHC Mire Externe.gds";
@@ -279,7 +277,6 @@ void Demo::essaiClient()
 	//GdstkUtils::Normalize(i1_lib, Vec{});
 
 	// pour pourvoir appliquer le sbons dégraissement
-
 	using namespace Clipper2Utils;
 
 	std::unique_ptr<PolyTreeD> i1 = MakeUnion(Clipper2Utils::ConvertGdstkPolygonsToPolyTreeD(i1_lib));
@@ -316,7 +313,6 @@ void Demo::essaiClient()
 	end = std::chrono::steady_clock::now();
 	std::cout << "total en: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() << " s" << std::endl;
 }
-
 
 void Demo::essaiClientComparison()
 {
@@ -356,7 +352,7 @@ void Demo::essaiClientComparison()
 	}
 }
 
-void Demo::ImageToSVG()
+void Demo::BMPToGDS()
 {
 	auto start = std::chrono::steady_clock::now();
 
@@ -366,57 +362,29 @@ void Demo::ImageToSVG()
 	std::cout << "Image to .gds " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 }
 
-void Demo::rasterisationStep()
-{
-	Library lib = GdstkUtils::LoadGDS("C:/Users/PC/Desktop/poc/fichiers_gdsii/Image Primaire V2.gds");
-	GdstkUtils::MakeFracture(lib, 1000); // triangulation passe de 9s à 0.5s
-
-	std::vector<Library> union_layer = { lib };
-	std::vector<earcutLayer> tris = Utils::EarcutTriangulation(union_layer);
-
-	//for (auto& src_dst : src_dst_boxes)
-	//{
-	//	// get perspectiveMatrixTransformation
-	//	Polygon* src_box = new Polygon();
-	//	Polygon* dst_box = new Polygon();
-
-	//	for (Vec2& point : src_dst.first)
-	//		src_box->point_array.append(point);
-
-	//	for (Vec2& point : src_dst.second)
-	//		dst_box->point_array.append(point);
-
-	//	Eigen::Matrix3d m = Warping::getPerspectiveMatrixTransform(src_box, dst_box);
-	//	std::vector<earcutPoly> polys_in_box = Warping::getPolygonsInBox(lib, src_box);
-
-	//	delete src_box, dst_box;
-	//	Warping::applyMatrixToPolygons(m, polys_in_box);
-	//	return;
-	//}
-
-
-}
-
 void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 {	
 	auto start3 = std::chrono::steady_clock::now();
 
 	/// 1: triangulate every layers
-	const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
+	//const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
+	const char* svg_filepath = "C:/Users/PC/Desktop/poc/004672-647720058a0 (1).top_LAYERS.svg";
 	std::vector<earcutPolys> polys_layers = Utils::ConvertSVGToEarcutLayers(svg_filepath);
 	std::vector<earcutLayer> triangulation_layers;
 
-	int cpt = 0;
-
 	for (earcutPolys& polys : polys_layers)
-		triangulation_layers.push_back(Utils::earcutTriangulation(polys));
+	{
+		earcutLayer tri_layer = Utils::earcutTriangulation(polys);
+		triangulation_layers.push_back(tri_layer);
+	}
 
 	Utils::Triangulation t = Utils::convertEarcutLayersToPointer(triangulation_layers);
 
 	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
 	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
+	printf("Taille d'un pixel en microns: %f\n", (25.4f / (float)dpi) * 1e3f);
 
-	/// 2: scale triangles for rasterization
+	/// 2: scale triangles to simplify rasterization
 	float scale = std::max(img_dim.x, img_dim.y);
 	Utils::ScaleTriangulation(t, scale);
 
@@ -424,9 +392,9 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	Utils::Triangulation dtriangulation;
 	auto start = std::chrono::steady_clock::now();
 
-	printf("vertices: %f Mo\n", (float)(t.nb_vertices * sizeof(float2)) / 1e6f);
-	printf("triangles: %f Mo\n", (float)(t.nb_triangles * sizeof(uint3)) / 1e6f);
-	printf("polarity: %f Mo\n", (float)(t.nb_triangles * sizeof(unsigned char)) / 1e6f);
+	printf("Vertices: %0.2f Mo\n", (float)(t.nb_vertices * sizeof(float2)) / 1e6f);
+	printf("Triangles: %0.2f Mo\n", (float)(t.nb_triangles * sizeof(uint3)) / 1e6f);
+	printf("Polarity: %0.2f Mo\n", (float)(t.nb_triangles * sizeof(unsigned char)) / 1e6f);
 
 	cudaMalloc((void**)&dtriangulation.v, t.nb_vertices * sizeof(float2));
 	cudaMalloc((void**)&dtriangulation.t, t.nb_triangles * sizeof(uint3));
@@ -450,14 +418,17 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	/// 5: warp and rasterize circuit
 	CudaCall::Warping(dtriangulation, src_dst_boxes);
 	unsigned char* img = CudaCall::Rasterization(dtriangulation, scale, img_dim);
-	CudaCall::saveToBmp("C:/Users/PC/Desktop/poc/rasterization.bmp", img_dim.x, img_dim.y, img);
+	CudaCall::saveToBmp(
+		("C:/Users/PC/Desktop/poc/rasterization_" + std::to_string(dpi) + "dpi.bmp").c_str(), 
+		img_dim.x, img_dim.y, 
+		img);
 
 	/// 6: free vram memory
 	cudaFree(dtriangulation.v);
 	cudaFree(dtriangulation.t);
 	cudaFree(dtriangulation.p);
+	delete[] img;
 
 	auto end3 = std::chrono::steady_clock::now();
 	std::cout << "! Total en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end3 - start3).count() << " ms" << std::endl;
-
 }

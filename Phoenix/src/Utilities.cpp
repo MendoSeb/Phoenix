@@ -278,7 +278,7 @@ namespace Utils
                     t.t[triangle_index].y = indices_count + indices[k + 1];
                     t.t[triangle_index].z = indices_count + indices[k + 2];
 
-                    t.p[triangle_index] = !((i % 2) == 0);
+                    t.p[triangle_index] = (unsigned char)((i % 2) == 0) * 255;
                     triangle_index++;
                 }
             }
@@ -299,6 +299,8 @@ namespace Utils
         float& scale
     )
     {
+        auto start = std::chrono::steady_clock::now();
+
         float min_x = FLT_MAX;
         float min_y = FLT_MAX;
         float max_x = -FLT_MAX;
@@ -325,6 +327,9 @@ namespace Utils
             triangulation.v[vertice_i].y =
                 ((triangulation.v[vertice_i].y - min_x) / max_side_size) * scale;
         }
+
+        auto end = std::chrono::steady_clock::now();
+        std::cout << "! Scaling en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
     }
 
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
@@ -457,7 +462,8 @@ namespace Utils
         auto start = std::chrono::steady_clock::now();
 
         TiXmlDocument doc;
-        doc.LoadFile(svg_filepath);
+        bool file_loaded = doc.LoadFile(svg_filepath);
+        assert(file_loaded);
 
         TiXmlElement* svg = doc.FirstChildElement("svg");
         TiXmlElement* g = svg->FirstChildElement("g");

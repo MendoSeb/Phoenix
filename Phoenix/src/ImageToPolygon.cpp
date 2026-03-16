@@ -68,7 +68,7 @@ void ImageToPolygons::ConvertBMPToPolygons(const char* filepath)
 	
 	Library lib = {};
 	Clipper2Utils::ConvertPolyTreeDToGdsiiPath(union_polytree, lib);
-	GdstkUtils::SaveToGdsii(lib, "C:/Users/PC/Desktop/poc/test.gds", false);
+	GdstkUtils::SaveToGdsii(lib, "C:/Users/PC/Desktop/poc/test_BMPToGDS.gds", false);
 
 	delete[] img;
 }

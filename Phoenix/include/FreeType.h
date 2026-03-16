@@ -22,8 +22,6 @@ public:
 	void StringToPolygons(std::string text);
 	PathsD CharacterToPolygons(const char c);
 
-	float4 GetPathsBoundingBox(const PathsD& paths);
-
 	static int MoveTo(const FT_Vector* to, void* poly);
 	static int LineTo(const FT_Vector* to, void* poly);
 	static int ConicTo(const FT_Vector* control, const FT_Vector* to, void* poly);

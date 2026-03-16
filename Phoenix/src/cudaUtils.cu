@@ -333,18 +333,21 @@ __global__ void RasterizationKernel(
 	int thread_local_id = threadIdx.y * blockDim.x + threadIdx.x;
 	int pixel_index = thread_y * img_dim.x + thread_x;
 
-	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y) return;
+	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y) 
+		return;
 
-	int tile_index = 
-		std::floor((float)thread_x / tile_size) * tiles_dim.y
-		+ std::floor((float)thread_y / tile_size);
+	int tile_index = std::floor((float)thread_x / tile_size) * tiles_dim.y
+					 + std::floor((float)thread_y / tile_size);
 
-	if (tile_index < 0 || tile_index >= (tiles_dim.x * tiles_dim.y)) return;
+	if (tile_index < 0 || tile_index >= (tiles_dim.x * tiles_dim.y)) 
+		return;
 
 	Tile tile = dtiles[tile_index];
-	float2 pixel{ thread_x, thread_y };
+	float2 pixel{ (float)thread_x + 0.5f, (float)thread_y + 0.5f };
 
-	if (tile.count == 0) return;
+	if (tile.count == 0) 
+		return;
+
 	bool pixel_hit = false; // does the pixel touch a triangle?
 
 	// triangles en memoire partagée
@@ -388,7 +391,7 @@ __global__ void RasterizationKernel(
 
 				if (checkPointInTriangleFast(pixel, tri))
 				{
-					img[pixel_index] = (triangles_polarity[k] == 0) ? 0 : 255;
+					img[pixel_index] = triangles_polarity[k];
 					pixel_hit = true;
 					break;
 				}
@@ -438,7 +441,7 @@ unsigned char* CudaCall::Rasterization(
 
 	unsigned char* dimg = nullptr;
 	cudaMalloc((void**)&dimg, sizeof(unsigned char) * nb_pixels);
-	cudaMemset(dimg, 100, sizeof(unsigned char) * nb_pixels);
+	cudaMemset(dimg, 100, sizeof(unsigned char) * nb_pixels); // pour vérifier qu'on écrive bien tous les pixels
 
 	Tile* dtiles = nullptr;
 	cudaMalloc((void**)&dtiles, nb_tiles * sizeof(Tile));
@@ -503,16 +506,6 @@ unsigned char* CudaCall::Rasterization(
 	std::cout << "! Total rasterization (allocations etc...) en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
 
 	return img;
-}
-
-
-
-__device__ bool isTriangleClockwise(float2 tri[3])
-{
-	int2 vec1{ tri[1].x - tri[0].x, tri[1].y - tri[0].y };
-	int2 vec2{ tri[2].x - tri[0].x, tri[2].y - tri[0].y };
-
-	return vec1.x * vec2.y - vec1.y * vec2.x < 0;
 }
 
 void CudaCall::saveToBmp(const std::string& filename, int width, int height,
