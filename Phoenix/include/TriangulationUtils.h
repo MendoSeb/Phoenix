@@ -56,6 +56,4 @@ namespace TrisUtils
 
     void writeObj(const char* file_name, float2* vertices, uint3* triangles, 
         size_t nb_v, size_t nb_tris);
-
-    std::vector<earcutPolys> ConvertSVGToEarcutLayers(const char* svg_filepath);
 }

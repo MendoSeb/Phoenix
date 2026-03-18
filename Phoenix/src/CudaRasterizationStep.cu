@@ -101,6 +101,7 @@ __device__ float4 getTriangleBoundingBox(float2 (&tri)[3])
 	return min_max;
 }
 
+
 // étape 1 de la rastérisation, connaitre pour chaque tuile le nombre de triangles qui les touchent
 __global__ void TileCount(
 	Triangulation dtriangulation,
@@ -275,6 +276,66 @@ __global__ void RasterizationKernel(
 	}
 
 	img[pixel_index] = tile_img[threadIdx.y][threadIdx.x];
+}
+
+// Charge un .svg en polygones earcut
+std::vector<earcutPolys> RasterizationStep::ConvertSVGToEarcutLayers(const char* svg_filepath)
+{
+	auto start = std::chrono::steady_clock::now();
+
+	TiXmlDocument doc;
+	bool file_loaded = doc.LoadFile(svg_filepath);
+	assert(file_loaded);
+
+	TiXmlElement* svg = doc.FirstChildElement("svg");
+	TiXmlElement* g = svg->FirstChildElement("g");
+	TiXmlElement* current_path = g->FirstChildElement("path");
+	std::vector<earcutPolys> polys_layers;
+	std::string last_fill_color = "";
+
+	while (current_path != nullptr)
+	{
+		const char* fill = current_path->Attribute("fill");
+		const char* d = current_path->Attribute("d");
+
+		// adding a new layer if the fill color is different
+		if (fill != last_fill_color)
+		{
+			polys_layers.push_back({});
+			last_fill_color = fill;
+		}
+
+		// load all points from <path> element
+		std::stringstream full_string(d);
+		std::string x_coordinate, y_coordinate;
+		char delimiter = ' ';
+
+		earcutPoly poly;
+		poly.push_back({});
+
+		while (getline(full_string, x_coordinate, delimiter)
+			&& getline(full_string, y_coordinate, delimiter))
+		{
+			// remove 'M' or 'L' character from x coordinate
+			x_coordinate = x_coordinate.substr(1, x_coordinate.size() - 1);
+
+			earcutPoint point;
+			point.at(0) = std::stof(x_coordinate);
+			point.at(1) = std::stof(y_coordinate);
+
+			poly[0].push_back(point);
+		}
+
+		poly[0].pop_back();
+		polys_layers.back().push_back(poly);
+		current_path = current_path->NextSiblingElement("path");
+	}
+
+
+	auto end = std::chrono::steady_clock::now();
+	std::cout << "! Conversion SVG -> Polygones earcut: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+
+	return polys_layers;
 }
 
 // Appliquer la déformation sur une triangulation

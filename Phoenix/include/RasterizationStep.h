@@ -46,6 +46,9 @@ namespace RasterizationStep
 		float2 max_pos = { 0, 0 };
 	};
 
+	// Charge un .svg en polygones earcut
+	std::vector<earcutPolys> ConvertSVGToEarcutLayers(const char* svg_filepath);
+
 	// Appliquer la déformation à une triangulation
 	void Warping(Triangulation dtriangulation, std::vector<Warping::Boxes>& src_dst);
 

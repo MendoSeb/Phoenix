@@ -369,7 +369,7 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	/// 1: triangulate every layers
 	//const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
 	const char* svg_filepath = "C:/Users/PC/Desktop/poc/004672-647720058a0 (1).top_LAYERS.svg";
-	std::vector<earcutPolys> polys_layers = TrisUtils::ConvertSVGToEarcutLayers(svg_filepath);
+	std::vector<earcutPolys> polys_layers = RasterizationStep::ConvertSVGToEarcutLayers(svg_filepath);
 	std::vector<earcutLayer> triangulation_layers;
 
 	for (earcutPolys& polys : polys_layers)
