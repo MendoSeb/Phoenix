@@ -17,7 +17,7 @@ __device__ bool isVertexRightOfSegment(const float2& v, const float2& s1, const 
 	return (v.x - s1.x) * (s2.y - s1.y) - (v.y - s1.y) * (s2.x - s1.x) >= 0.0f;
 }
 
-__device__ bool checkPointInTriangleFast(const float2& pixel, float2 tri[3]) 
+__device__ bool checkPointInTriangleFast(const float2& pixel, float2 (&tri)[3]) 
 {
 	// On calcule le signe de l'aire formée par le point et chaque arête
 	// (ax-px)*(by-py) - (ay-py)*(bx-px)
@@ -41,7 +41,7 @@ __device__ bool checkPointInTriangleFast(const float2& pixel, float2 tri[3])
 }
 
 // les boites doivent être dans le sens horaire
-__device__ bool isVertexInsideBox(const float2 box[4], const float2& vertex)
+__device__ bool isVertexInsideBox(const float2 (&box)[4], const float2& vertex)
 {
 	float2 tri1 [3] {
 		{box[0].x, box[0].y},
@@ -99,7 +99,7 @@ __global__ void WarpingKernel(
 }
 
 
-__device__ float4 getTriangleBoundingBox(float2 tri[3])
+__device__ float4 getTriangleBoundingBox(float2 (&tri)[3])
 {
 	float4 min_max = { FLT_MAX, FLT_MAX, FLT_MIN, FLT_MIN };
 
@@ -116,7 +116,7 @@ __device__ float4 getTriangleBoundingBox(float2 tri[3])
 }
 
 
-__device__ bool isTriangleInBoundingBox(float2 tri[3], const float2& min_p, const float2& max_p)
+__device__ bool isTriangleInBoundingBox(float2 (&tri)[3], const float2& min_p, const float2& max_p)
 {
     // --- ÉTAPE 1 : Test rapide par Bounding Box du triangle (AABB vs AABB) ---
     // On vérifie si la boîte du triangle et la cellule se touchent même de loin.
@@ -256,8 +256,8 @@ __global__ void TileCount(
 		// Calculer la plage de tuiles touchée par la boîte englobante
 		int min_x = floorf(bb.x / tile_size);
 		int min_y = floorf(bb.y / tile_size);
-		int max_x = fminf((float)tiles_dim.x - 1, floorf(bb.z / tile_size));
-		int max_y = fminf((float)tiles_dim.y - 1, floorf(bb.w / tile_size));
+		int max_x = fminf(ceilf(bb.z / tile_size), (float)tiles_dim.x - 1);
+		int max_y = fminf(ceilf(bb.w / tile_size), (float)tiles_dim.y - 1);
 
 		for (int x = min_x; x <= max_x; x++) {
 			for (int y = min_y; y <= max_y; y++) {
@@ -355,6 +355,9 @@ __global__ void RasterizationKernel(
 	int nb_chunk = std::ceil((float)tile.count / (float)chunk_size);
 	__shared__ float2 triangles[chunk_size * 3];
 	__shared__ unsigned char triangles_polarity[chunk_size];
+	__shared__ unsigned char tile_img[32][32];
+
+	tile_img[threadIdx.y][threadIdx.x] = 0;
 
 	for (int i = 0; i < nb_chunk; i++)
 	{
@@ -378,7 +381,7 @@ __global__ void RasterizationKernel(
 			// count valid triangles
 			int nb_tris = chunk_size;
 
-			if (chunk_size > tile.count - (i * chunk_size))
+			if (nb_tris > tile.count - (i * chunk_size))
 				nb_tris = tile.count - (i * chunk_size);
 
 			for (int k = 0; k < nb_tris; k++)
@@ -391,7 +394,8 @@ __global__ void RasterizationKernel(
 
 				if (checkPointInTriangleFast(pixel, tri))
 				{
-					img[pixel_index] = triangles_polarity[k];
+					// on écrit en mémoire partagée plutôt que dans l'image directement
+					tile_img[threadIdx.y][threadIdx.x] = triangles_polarity[k];
 					pixel_hit = true;
 					break;
 				}
@@ -400,6 +404,8 @@ __global__ void RasterizationKernel(
 
 		__syncthreads();
 	}
+
+	img[pixel_index] = tile_img[threadIdx.y][threadIdx.x];
 }
 
 

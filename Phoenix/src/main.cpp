@@ -32,12 +32,12 @@ int main()
 
 	//gpu();
 
-	//float inch_x = (24.7f * 2.0f) / 2.54f; // pour le circuit 58a0 je crois
-	//float inch_y = (16.8f * 3.5f) / 2.54f;
-	//MultiLayerRasterization({ inch_x, inch_y }, 1200);
+	float inch_x = (26.3f * 2.0f) / 2.54f; // pour le circuit 58a0
+	float inch_y = (16.8f * 3.5f) / 2.54f;
+	MultiLayerRasterization({ inch_x, inch_y }, 100);
 
-	FreeType ft;
-	ft.StringToPolygons("abcdefghijklmnopqrstuvwxyz\nABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890");
+	//FreeType ft;
+	//ft.StringToPolygons("abcdefghijklmnopqrstuvwxyz\nABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890");
 
 	//BMPToGDS();
 	

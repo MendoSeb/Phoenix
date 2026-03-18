@@ -382,7 +382,7 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 
 	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
 	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
-	printf("Taille d'un pixel en microns: %f\n", (25.4f / (float)dpi) * 1e3f);
+	printf("Taille d'un pixel en microns: %0.1f\n", (25.4f / (float)dpi) * 1e3f);
 
 	/// 2: scale triangles to simplify rasterization
 	float scale = std::max(img_dim.x, img_dim.y);
@@ -416,7 +416,7 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	cudaFree(t.p);
 
 	/// 5: warp and rasterize circuit
-	CudaCall::Warping(dtriangulation, src_dst_boxes);
+	//CudaCall::Warping(dtriangulation, src_dst_boxes);
 	unsigned char* img = CudaCall::Rasterization(dtriangulation, scale, img_dim);
 	CudaCall::saveToBmp(
 		("C:/Users/PC/Desktop/poc/rasterization_" + std::to_string(dpi) + "dpi.bmp").c_str(), 
