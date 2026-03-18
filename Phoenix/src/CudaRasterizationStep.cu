@@ -1,4 +1,4 @@
-#include "cudaCall.h"
+#include "RasterizationStep.h"
 #include <cstdio>
 #include <cuda_runtime.h>
 #include "Warping.h"
@@ -7,7 +7,7 @@
 #include <iostream>
 
 
-using namespace CudaCall;
+using namespace RasterizationStep;
 
 
 // Détermine si un point est dans un triangle (l'ordre du triangle n'importe pas)
@@ -185,59 +185,6 @@ __global__ void TileAssociate(
 	}
 }
 
-// Appliquer la déformation sur une triangulation
-void CudaCall::Warping
-(
-	Triangulation dtriangulation,
-	std::vector<Warping::Boxes>& src_dst
-)
-{
-	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-
-	//calcul des matrices de transformation
-	Warping::Boxes* src_dst2 = new Warping::Boxes[src_dst.size()];
-	Eigen::Matrix3d* homography_matrices = new Eigen::Matrix3d[src_dst.size()];
-
-	for (size_t i = 0; i < src_dst.size(); i++)
-	{
-		src_dst2[i] = src_dst[i];
-		homography_matrices[i] = Warping::getPerspectiveMatrixTransform(src_dst[i].src, src_dst[i].dst);
-	}
-
-	// allocation mémoire gpu
-	Warping::Boxes* db = nullptr;
-	Eigen::Matrix3d* dm = nullptr;
-
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
-
-	cudaMallocAsync((void**)&db, sizeof(Warping::Boxes) * src_dst.size(), stream);
-	cudaMallocAsync((void**)&dm, sizeof(Eigen::Matrix3d) * src_dst.size(), stream);
-
-	cudaMemcpyAsync(db, src_dst2, src_dst.size() * sizeof(Warping::Boxes), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dm, homography_matrices, src_dst.size() * sizeof(Eigen::Matrix3d), cudaMemcpyHostToDevice, stream);
-
-	// appel
-	size_t nb_threads_per_blocks = 1024;
-	size_t nb_blocks = std::ceil(dtriangulation.nb_vertices / 1024);
-	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
-	std::cout << "Nb vertices = " << dtriangulation.nb_vertices << std::endl;
-
-	WarpingKernel << <nb_blocks, nb_threads_per_blocks >> > (dtriangulation.v, dtriangulation.t, dtriangulation.nb_vertices, db, dm);
-
-	cudaDeviceSynchronize();
-	// libération mémoire
-	cudaFreeAsync(db, stream);
-	cudaFreeAsync(dm, stream);
-	cudaStreamDestroy(stream);
-
-	delete src_dst2;
-	delete homography_matrices;
-
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "! warping en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
-}
-
 // Kernel de rastérisation, utilises TileCount et TileAssociate
 __global__ void RasterizationKernel(
 	Triangulation dtriangulation,
@@ -330,9 +277,61 @@ __global__ void RasterizationKernel(
 	img[pixel_index] = tile_img[threadIdx.y][threadIdx.x];
 }
 
+// Appliquer la déformation sur une triangulation
+void RasterizationStep::Warping
+(
+	Triangulation dtriangulation,
+	std::vector<Warping::Boxes>& src_dst
+)
+{
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+
+	//calcul des matrices de transformation
+	Warping::Boxes* src_dst2 = new Warping::Boxes[src_dst.size()];
+	Eigen::Matrix3d* homography_matrices = new Eigen::Matrix3d[src_dst.size()];
+
+	for (size_t i = 0; i < src_dst.size(); i++)
+	{
+		src_dst2[i] = src_dst[i];
+		homography_matrices[i] = Warping::getPerspectiveMatrixTransform(src_dst[i].src, src_dst[i].dst);
+	}
+
+	// allocation mémoire gpu
+	Warping::Boxes* db = nullptr;
+	Eigen::Matrix3d* dm = nullptr;
+
+	cudaStream_t stream;
+	cudaStreamCreate(&stream);
+
+	cudaMallocAsync((void**)&db, sizeof(Warping::Boxes) * src_dst.size(), stream);
+	cudaMallocAsync((void**)&dm, sizeof(Eigen::Matrix3d) * src_dst.size(), stream);
+
+	cudaMemcpyAsync(db, src_dst2, src_dst.size() * sizeof(Warping::Boxes), cudaMemcpyHostToDevice, stream);
+	cudaMemcpyAsync(dm, homography_matrices, src_dst.size() * sizeof(Eigen::Matrix3d), cudaMemcpyHostToDevice, stream);
+
+	// appel
+	size_t nb_threads_per_blocks = 1024;
+	size_t nb_blocks = std::ceil(dtriangulation.nb_vertices / 1024);
+	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
+	std::cout << "Nb vertices = " << dtriangulation.nb_vertices << std::endl;
+
+	WarpingKernel << <nb_blocks, nb_threads_per_blocks >> > (dtriangulation.v, dtriangulation.t, dtriangulation.nb_vertices, db, dm);
+
+	cudaDeviceSynchronize();
+	// libération mémoire
+	cudaFreeAsync(db, stream);
+	cudaFreeAsync(dm, stream);
+	cudaStreamDestroy(stream);
+
+	delete src_dst2;
+	delete homography_matrices;
+
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "! warping en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+}
 
 // Rastérise une triangulation
-unsigned char* CudaCall::Rasterization(
+unsigned char* RasterizationStep::Rasterization(
 	Triangulation& dtriangulation,
 	double scale,
 	uint2 img_dim
@@ -437,23 +436,23 @@ unsigned char* CudaCall::Rasterization(
 }
 
 // Sauvegarde "img" en .bmp
-void CudaCall::SaveToBmp(const std::string& filename, int width, int height,
+void RasterizationStep::SaveToBmp(const std::string& filename, int width, int height,
 	unsigned char* img)
 {
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
 	// 2. Prepare BMP Headers and Palette
-	CudaCall::BitmapFileHeader fileHeader;
-	CudaCall::BitmapInfoHeader infoHeader;
+	BitmapFileHeader fileHeader;
+	BitmapInfoHeader infoHeader;
 
 	infoHeader.width = width;
 	infoHeader.height = height;
 	infoHeader.bit_count = 8;
-	infoHeader.size = sizeof(CudaCall::BitmapInfoHeader);
+	infoHeader.size = sizeof(RasterizationStep::BitmapInfoHeader);
 
 	uint32_t palette_size = 256 * 4; // 256 grayscale entries, 4 bytes each
-	fileHeader.offset_data = sizeof(CudaCall::BitmapFileHeader) 
-		+ sizeof(CudaCall::BitmapInfoHeader) + palette_size;
+	fileHeader.offset_data = sizeof(BitmapFileHeader) 
+		+ sizeof(BitmapInfoHeader) + palette_size;
 
 	fileHeader.file_size = fileHeader.offset_data + (width * height);
 

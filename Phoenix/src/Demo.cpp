@@ -4,7 +4,7 @@
 #include "TriangulationUtils.h"
 #include "Optix.h"
 #include <ODB++Parser.h>
-#include "cudaCall.h"
+#include "RasterizationStep.h"
 #include <ImageToPolygons.h>
 
 
@@ -416,9 +416,9 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	cudaFree(t.p);
 
 	/// 5: warp and rasterize circuit
-	//CudaCall::Warping(dtriangulation, src_dst_boxes);
-	unsigned char* img = CudaCall::Rasterization(dtriangulation, scale, img_dim);
-	CudaCall::SaveToBmp(
+	//RasterizationStep::Warping(dtriangulation, src_dst_boxes);
+	unsigned char* img = RasterizationStep::Rasterization(dtriangulation, scale, img_dim);
+	RasterizationStep::SaveToBmp(
 		("C:/Users/PC/Desktop/poc/rasterization_" + std::to_string(dpi) + "dpi.bmp").c_str(), 
 		img_dim.x, img_dim.y, 
 		img);

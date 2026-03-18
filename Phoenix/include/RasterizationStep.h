@@ -6,19 +6,7 @@
 #include "TriangulationUtils.h"
 
 
-#define CUDA_CHECK(call)                                                      \
-    do {                                                                      \
-        cudaError_t error = call;                                             \
-        if (error != cudaSuccess) {                                           \
-            std::stringstream ss;                                             \
-            ss << "CUDA Error: " << cudaGetErrorString(error) << " in "       \
-               << __FILE__ << " at line " << __LINE__;                        \
-            throw std::runtime_error(ss.str());                               \
-        }                                                                     \
-    } while (0)                                                                \
-
-
-namespace CudaCall
+namespace RasterizationStep
 {
 	typedef unsigned int uint;
 

@@ -18,7 +18,7 @@ set(OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0")
 set(OPTIX_INCLUDE_DIR "${OPTIX_INSTALL_DIR}/include")
 set(OPTIX_SAMPLES_SDK_DIR "${OPTIX_INSTALL_DIR}/SDK") # Pour vec_math.h
 
-file(GLOB_RECURSE MY_SOURCES "src/*.cpp")
+file(GLOB_RECURSE MY_SOURCES "src/*.cpp", "src/*.cu")
 file(GLOB_RECURSE GDSTK_SOURCES "gdstk/src/*.cpp")
 file(GLOB_RECURSE CLIPPER1_SOURCES "clipper1/cpp/*.cpp")
 
@@ -26,7 +26,6 @@ file(GLOB_RECURSE CLIPPER1_SOURCES "clipper1/cpp/*.cpp")
 set(OPTIX_SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/src/Phoenix.cu")
 set(OPTIX_OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/Phoenix.optixir")
 
-set(cuda_utils "${CMAKE_CURRENT_SOURCE_DIR}/src/cudaUtils.cu")
 
 # --- Compilation du fichier .cu en .optixir avec NVCC ---
 add_custom_command(
@@ -58,7 +57,6 @@ add_executable(executable
     ${GDSTK_SOURCES} 
     ${CLIPPER1_SOURCES}
     "${OPTIX_SOURCE_FILE}"
-    ${cuda_utils}
 )
 
 add_dependencies(executable GenerateOptiXIR)

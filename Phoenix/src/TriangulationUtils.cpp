@@ -1,7 +1,7 @@
 #pragma once
 #include "TriangulationUtils.h"
 #include <GdstkUtils.h>
-#include <cudaCall.h>
+#include "RasterizationStep.h"
 
 
 std::vector<earcutLayer> TrisUtils::EarcutTriangulation(std::vector<Library>& layers)

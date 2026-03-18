@@ -1,6 +1,6 @@
 #include "FreeType.h"
 #include <iostream>
-#include <cudaCall.h>
+#include "RasterizationStep.h"
 #include <freetype/ftbitmap.h>
 #include <freetype/ftoutln.h>
 
