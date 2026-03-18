@@ -11,9 +11,10 @@ using namespace gdstk;
 
 namespace Warping
 {
+    // calcule la matrice de transformation homographique pour passer des points de src à dst
     Eigen::Matrix3d getPerspectiveMatrixTransform(const float2 src[4], const float2 dst[4]);
 
-    // boite représentant la boite cible et sa destination réelle
+    // boite représentant la boite cible et sa destination réelle sur le plateau
     struct Boxes {
         float2 src[4];
         float2 dst[4];

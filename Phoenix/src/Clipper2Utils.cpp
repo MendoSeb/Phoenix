@@ -4,7 +4,7 @@
 #include "clipper2/clipper.h" // Ajouté pour TriangulatePaths
 #include <GdstkUtils.h>
 #include <thread>
-#include <Utilities.h>
+#include "TriangulationUtils.h"
 
 
 namespace Clipper2Utils

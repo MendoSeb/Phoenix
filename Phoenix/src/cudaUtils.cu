@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cuda_runtime.h>
 #include "Warping.h"
-#include <tiffio.h>
 #include <device_launch_parameters.h>
 #include <chrono>
 #include <iostream>
@@ -11,17 +10,9 @@
 using namespace CudaCall;
 
 
-// pineda edge function
-__device__ bool isVertexRightOfSegment(const float2& v, const float2& s1, const float2& s2)
+// Détermine si un point est dans un triangle (l'ordre du triangle n'importe pas)
+__device__ bool IsPointInTriangle(const float2& pixel, float2 (&tri)[3]) 
 {
-	return (v.x - s1.x) * (s2.y - s1.y) - (v.y - s1.y) * (s2.x - s1.x) >= 0.0f;
-}
-
-__device__ bool checkPointInTriangleFast(const float2& pixel, float2 (&tri)[3]) 
-{
-	// On calcule le signe de l'aire formée par le point et chaque arête
-	// (ax-px)*(by-py) - (ay-py)*(bx-px)
-
 	auto sign = [](float x1, float y1, float x2, float y2, float x3, float y3) 
 	{
 		return (x1 - x3) * (y2 - y3) - (x2 - x3) * (y1 - y3);
@@ -31,7 +22,6 @@ __device__ bool checkPointInTriangleFast(const float2& pixel, float2 (&tri)[3])
 	float d2 = sign(pixel.x, pixel.y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
 	float d3 = sign(pixel.x, pixel.y, tri[2].x, tri[2].y, tri[0].x, tri[0].y);
 
-	// Un point est dedans si toutes les aires ont le même signe
 	bool has_neg = (d1 <= 0) || (d2 <= 0) || (d3 <= 0);
 	bool has_pos = (d1 >= 0) || (d2 >= 0) || (d3 >= 0);
 
@@ -40,7 +30,7 @@ __device__ bool checkPointInTriangleFast(const float2& pixel, float2 (&tri)[3])
 	return !(has_neg && has_pos);
 }
 
-// les boites doivent être dans le sens horaire
+// Détermine si un point est dans une boite (deux triangles). Les boites doivent être dans le sens horaire
 __device__ bool isVertexInsideBox(const float2 (&box)[4], const float2& vertex)
 {
 	float2 tri1 [3] {
@@ -55,15 +45,11 @@ __device__ bool isVertexInsideBox(const float2 (&box)[4], const float2& vertex)
 		{box[3].x, box[3].y},
 	};
 
-	return checkPointInTriangleFast(vertex, tri1)
-		|| checkPointInTriangleFast(vertex, tri2);
+	return IsPointInTriangle(vertex, tri1)
+		|| IsPointInTriangle(vertex, tri2);
 }
 
-__device__ bool isVertexInsideSquareBox(const float2& min, const float2& max, const float2& vertex)
-{
-	return vertex.x >= min.x && vertex.x <= max.x && vertex.y >= min.y && vertex.y <= max.y;
-}
-
+// Kernel cuda pour trouver les sommets dans les boites et appliquer la matrice de transformation correspondante
 __global__ void WarpingKernel(
 	float2* vertices,
 	uint3* triangles,
@@ -98,7 +84,7 @@ __global__ void WarpingKernel(
 	}
 }
 
-
+// Renvoie la boite englobante du triangle (pour connaitre les tuiles touchées lors de la rastérisation)
 __device__ float4 getTriangleBoundingBox(float2 (&tri)[3])
 {
 	float4 min_max = { FLT_MAX, FLT_MAX, FLT_MIN, FLT_MIN };
@@ -115,126 +101,9 @@ __device__ float4 getTriangleBoundingBox(float2 (&tri)[3])
 	return min_max;
 }
 
-
-__device__ bool isTriangleInBoundingBox(float2 (&tri)[3], const float2& min_p, const float2& max_p)
-{
-    // --- ÉTAPE 1 : Test rapide par Bounding Box du triangle (AABB vs AABB) ---
-    // On vérifie si la boîte du triangle et la cellule se touchent même de loin.
-    float2 t_min = { fminf(fminf(tri[0].x, tri[1].x), tri[2].x), fminf(fminf(tri[0].y, tri[1].y), tri[2].y) };
-    float2 t_max = { fmaxf(fmaxf(tri[0].x, tri[1].x), tri[2].x), fmaxf(fmaxf(tri[0].y, tri[1].y), tri[2].y) };
-
-    if (t_max.x < min_p.x || t_min.x > max_p.x || t_max.y < min_p.y || t_min.y > max_p.y)
-        return false;
-
-    // --- ÉTAPE 2 : Test des axes de séparation (SAT) pour les arêtes ---
-    // Pour chaque arête du triangle, on vérifie si la boîte est d'un côté ou de l'autre.
-    // Cela remplace vos cas 2 et 3 de manière exhaustive.
-    
-    auto checkEdge = [&](float2 v0, float2 v1) {
-        float2 edge = { v1.x - v0.x, v1.y - v0.y };
-        float2 normal = { -edge.y, edge.x }; // Normale à l'arête
-        
-        // On projette les sommets de la boîte sur la normale pour voir s'ils sont tous du même côté
-        float dot0 = v0.x * normal.x + v0.y * normal.y;
-        
-        // Coins de la boîte à tester par rapport à l'arête
-        float p0 = min_p.x * normal.x + min_p.y * normal.y;
-        float p1 = max_p.x * normal.x + min_p.y * normal.y;
-        float p2 = min_p.x * normal.x + max_p.y * normal.y;
-        float p3 = max_p.x * normal.x + max_p.y * normal.y;
-
-        float b_min = fminf(fminf(p0, p1), fminf(p2, p3));
-        float b_max = fmaxf(fmaxf(p0, p1), fmaxf(p2, p3));
-
-        // On projette le 3ème sommet du triangle pour savoir de quel côté est l'intérieur
-        // (On peut aussi utiliser l'ordre des sommets si constant)
-        // Mais le test simplifié : si la boîte est entièrement d'un côté de l'arête 
-        // ET que le triangle est de l'autre, alors pas d'intersection.
-        // ... (simplification pour 2D) ...
-    };
-
-    // VERSION ENCORE PLUS SIMPLE POUR LE GPU :
-    // Si l'AABB (Etape 1) passe, le seul cas restant est si la boîte est 
-    // "extérieure" aux trois demi-plans formés par les arêtes du triangle.
-    
-    // On utilise le "Cross Product" pour vérifier si la boîte est totalement 
-    // à l'extérieur d'une des arêtes.
-    #pragma unroll
-    for (int i = 0; i < 3; i++) {
-        int next = (i + 1 == 3) ? 0 : i + 1; // Pas de modulo !
-        float2 edge = { tri[next].x - tri[i].x, tri[next].y - tri[i].y };
-        float2 n = { -edge.y, edge.x };
-        
-        // On choisit le coin de la boîte le plus "favorable" selon le signe de la normale
-        float test_x = (n.x >= 0) ? max_p.x : min_p.x;
-        float test_y = (n.y >= 0) ? max_p.y : min_p.y;
-        
-        // Si le point le plus proche de la normale est quand même "derrière" l'arête
-        if ((test_x - tri[i].x) * n.x + (test_y - tri[i].y) * n.y < 0) {
-            // Attention : l'ordre des sommets (CW ou CCW) compte ici.
-            // Si l'ordre est inconnu, il faut tester les deux côtés.
-        }
-    }
-
-    return true; // Si aucun axe ne sépare les objets, ils s'intersectent.
-}
-
-
-void CudaCall::Warping
-(
-	Utils::Triangulation dtriangulation,
-	std::vector<Warping::Boxes>& src_dst
-)
-{
-	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-
-	//calcul des matrices de transformation
-	Warping::Boxes* src_dst2 = new Warping::Boxes[src_dst.size()];
-	Eigen::Matrix3d* homography_matrices = new Eigen::Matrix3d[src_dst.size()];
-
-	for (size_t i = 0; i < src_dst.size(); i++)
-	{
-		src_dst2[i] = src_dst[i];
-		homography_matrices[i] = Warping::getPerspectiveMatrixTransform(src_dst[i].src, src_dst[i].dst);
-	}
-
-	// allocation mémoire gpu
-	Warping::Boxes* db = nullptr;
-	Eigen::Matrix3d* dm = nullptr;
-
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);
-
-	cudaMallocAsync((void**)&db, sizeof(Warping::Boxes) * src_dst.size(), stream);
-	cudaMallocAsync((void**)&dm, sizeof(Eigen::Matrix3d) * src_dst.size(), stream);
-
-	cudaMemcpyAsync(db, src_dst2, src_dst.size() * sizeof(Warping::Boxes), cudaMemcpyHostToDevice, stream);
-	cudaMemcpyAsync(dm, homography_matrices, src_dst.size() * sizeof(Eigen::Matrix3d), cudaMemcpyHostToDevice, stream);
-
-	// appel
-	size_t nb_threads_per_blocks = 1024;
-	size_t nb_blocks = std::ceil(dtriangulation.nb_vertices / 1024);
-	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
-	std::cout << "Nb vertices = " << dtriangulation.nb_vertices << std::endl;
-
-	WarpingKernel <<<nb_blocks, nb_threads_per_blocks>>> (dtriangulation.v, dtriangulation.t, dtriangulation.nb_vertices, db, dm);
-
-	cudaDeviceSynchronize();
-	// libération mémoire
-	cudaFreeAsync(db, stream);
-	cudaFreeAsync(dm, stream);
-	cudaStreamDestroy(stream);
-
-	delete src_dst2;
-	delete homography_matrices;
-
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "! warping en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
-}
-
-
+// étape 1 de la rastérisation, connaitre pour chaque tuile le nombre de triangles qui les touchent
 __global__ void TileCount(
-	Utils::Triangulation dtriangulation,
+	Triangulation dtriangulation,
 	Tile* dtiles,
 	int nb_tiles,
 	uint2 tiles_dim,
@@ -271,9 +140,9 @@ __global__ void TileCount(
 	}
 }
 
-
+// étape 2 de la rastérisation, affecter pour chaque tuile les indices des triangles qui les touchent
 __global__ void TileAssociate(
-	Utils::Triangulation dtriangulation,
+	Triangulation dtriangulation,
 	Tile* dtiles,
 	int nb_tiles,
 	int* d_indices,
@@ -316,9 +185,62 @@ __global__ void TileAssociate(
 	}
 }
 
+// Appliquer la déformation sur une triangulation
+void CudaCall::Warping
+(
+	Triangulation dtriangulation,
+	std::vector<Warping::Boxes>& src_dst
+)
+{
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
+	//calcul des matrices de transformation
+	Warping::Boxes* src_dst2 = new Warping::Boxes[src_dst.size()];
+	Eigen::Matrix3d* homography_matrices = new Eigen::Matrix3d[src_dst.size()];
+
+	for (size_t i = 0; i < src_dst.size(); i++)
+	{
+		src_dst2[i] = src_dst[i];
+		homography_matrices[i] = Warping::getPerspectiveMatrixTransform(src_dst[i].src, src_dst[i].dst);
+	}
+
+	// allocation mémoire gpu
+	Warping::Boxes* db = nullptr;
+	Eigen::Matrix3d* dm = nullptr;
+
+	cudaStream_t stream;
+	cudaStreamCreate(&stream);
+
+	cudaMallocAsync((void**)&db, sizeof(Warping::Boxes) * src_dst.size(), stream);
+	cudaMallocAsync((void**)&dm, sizeof(Eigen::Matrix3d) * src_dst.size(), stream);
+
+	cudaMemcpyAsync(db, src_dst2, src_dst.size() * sizeof(Warping::Boxes), cudaMemcpyHostToDevice, stream);
+	cudaMemcpyAsync(dm, homography_matrices, src_dst.size() * sizeof(Eigen::Matrix3d), cudaMemcpyHostToDevice, stream);
+
+	// appel
+	size_t nb_threads_per_blocks = 1024;
+	size_t nb_blocks = std::ceil(dtriangulation.nb_vertices / 1024);
+	std::cout << "Nb threads = " << nb_blocks * nb_threads_per_blocks << std::endl;
+	std::cout << "Nb vertices = " << dtriangulation.nb_vertices << std::endl;
+
+	WarpingKernel << <nb_blocks, nb_threads_per_blocks >> > (dtriangulation.v, dtriangulation.t, dtriangulation.nb_vertices, db, dm);
+
+	cudaDeviceSynchronize();
+	// libération mémoire
+	cudaFreeAsync(db, stream);
+	cudaFreeAsync(dm, stream);
+	cudaStreamDestroy(stream);
+
+	delete src_dst2;
+	delete homography_matrices;
+
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "! warping en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+}
+
+// Kernel de rastérisation, utilises TileCount et TileAssociate
 __global__ void RasterizationKernel(
-	Utils::Triangulation dtriangulation,
+	Triangulation dtriangulation,
 	Tile* dtiles,
 	uint2 tiles_dim,
 	int tile_size,
@@ -392,7 +314,7 @@ __global__ void RasterizationKernel(
 					triangles[k * 3 + 2]
 				};
 
-				if (checkPointInTriangleFast(pixel, tri))
+				if (IsPointInTriangle(pixel, tri))
 				{
 					// on écrit en mémoire partagée plutôt que dans l'image directement
 					tile_img[threadIdx.y][threadIdx.x] = triangles_polarity[k];
@@ -409,9 +331,9 @@ __global__ void RasterizationKernel(
 }
 
 
-// un groupe de threads par triangle
+// Rastérise une triangulation
 unsigned char* CudaCall::Rasterization(
-	Utils::Triangulation& dtriangulation,
+	Triangulation& dtriangulation,
 	double scale,
 	uint2 img_dim
 )
@@ -514,8 +436,9 @@ unsigned char* CudaCall::Rasterization(
 	return img;
 }
 
-void CudaCall::saveToBmp(const std::string& filename, int width, int height,
-	unsigned char* hostData)
+// Sauvegarde "img" en .bmp
+void CudaCall::SaveToBmp(const std::string& filename, int width, int height,
+	unsigned char* img)
 {
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
@@ -546,50 +469,17 @@ void CudaCall::saveToBmp(const std::string& filename, int width, int height,
 	std::ofstream file(filename, std::ios::binary);
 	if (!file.is_open()) {
 		std::cerr << "Error: Could not open file for writing." << std::endl;
-		delete[] hostData;
+		delete[] img;
 		return;
 	}
 
 	file.write(reinterpret_cast<const char*>(&fileHeader), sizeof(fileHeader));
 	file.write(reinterpret_cast<const char*>(&infoHeader), sizeof(infoHeader));
 	file.write(palette.data(), palette.size());
-	file.write(reinterpret_cast<const char*>(hostData), width * height);
+	file.write(reinterpret_cast<const char*>(img), width * height);
 
 	file.close();
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	std::cout << "Sauvegarde en .bmp en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
-}
-
-
-void CudaCall::saveToTiff(unsigned char* img, uint2 img_dim)
-{
-	TIFF* out = TIFFOpen("C:/Users/PC/Desktop/poc/rasterization.tif", "w8");
-	int sampleperpixel = 1;    // or 3 if there is no alpha channel, you should get a understanding of alpha in class soon.
-
-	TIFFSetField(out, TIFFTAG_IMAGEWIDTH, img_dim.x);  // set the width of the image
-	TIFFSetField(out, TIFFTAG_IMAGELENGTH, img_dim.y);    // set the height of the image
-	TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, sampleperpixel);   // set number of channels per pixel
-	TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8);    // set the size of the channels
-	TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);    // set the origin of the image.
-	//   Some other essential fields to set that you do not have to understand for now.
-	TIFFSetField(out, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-	TIFFSetField(out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-
-	size_t stride = (size_t)img_dim.x * sampleperpixel;
-	unsigned char* buf = (unsigned char*)_TIFFmalloc(TIFFScanlineSize(out));
-
-	TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, img_dim.x * sampleperpixel));
-
-	for (uint32 row = 0; row < img_dim.y; row++)
-	{
-		memcpy(buf, &img[(size_t)(img_dim.y - row - 1) * stride], stride);
-		if (TIFFWriteScanline(out, buf, row, 0) < 0)
-			break;
-	}
-
-	(void)TIFFClose(out);
-
-	if (buf)
-		_TIFFfree(buf);
 }

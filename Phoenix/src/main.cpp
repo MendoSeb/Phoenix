@@ -3,7 +3,7 @@
 #include "Clipper2Utils.h"
 #include "GdstkUtils.h"
 #include "earcut.hpp"
-#include "Utilities.h"
+#include "TriangulationUtils.h"
 #include "Optix.h"
 #include "ODB++Parser.h"
 #include "Demo.h"

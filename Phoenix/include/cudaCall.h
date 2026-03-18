@@ -3,7 +3,7 @@
 #include <GdstkUtils.h>
 #include <Warping.h>
 #include <fstream>
-#include <Utilities.h>
+#include "TriangulationUtils.h"
 
 
 #define CUDA_CHECK(call)                                                      \
@@ -47,6 +47,7 @@ namespace CudaCall
 	#pragma pack(pop)
 
 
+	// Représente une case contenant des triangles la touchant pour la rastérisation
 	struct Tile
 	{
 		uint offset = 0;
@@ -57,28 +58,13 @@ namespace CudaCall
 		float2 max_pos = { 0, 0 };
 	};
 
+	// Appliquer la déformation à une triangulation
+	void Warping(Triangulation dtriangulation, std::vector<Warping::Boxes>& src_dst);
 
-	struct RasterizationData
-	{
-		float2* dv = nullptr;
-		uint3* dt = nullptr;
-		Tile* dtile = nullptr;
+	// Rastérise une triangulation
+	unsigned char* Rasterization(Triangulation& dtriangulation, double scale, uint2 img_dim);
 
-		int nb_vertices = 0;
-		int nb_triangles = 0;
-		uint2 nb_tiles { 0, 0 };
-		uint2 img_dim { 0, 0 };
-	};
-
-	void Warping(
-		Utils::Triangulation dtriangulation,
-		std::vector<Warping::Boxes>& src_dst
-	);
-
-	unsigned char* Rasterization(Utils::Triangulation& dtriangulation, double scale, uint2 img_dim);
-
-	void saveToBmp(const std::string& filename, int width, int height,
-		unsigned char* hostData);
-
-	void saveToTiff(unsigned char* img, uint2 img_dim);
+	// Sauvegarde "img" en .bmp
+	void SaveToBmp(const std::string& filename, int width, int height,
+		unsigned char* img);
 };

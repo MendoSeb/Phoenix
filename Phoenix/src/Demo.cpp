@@ -1,7 +1,7 @@
 #include "Demo.h"
 #include <Clipper2Utils.h>
 #include <Warping.h>
-#include <Utilities.h>
+#include "TriangulationUtils.h"
 #include "Optix.h"
 #include <ODB++Parser.h>
 #include "cudaCall.h"
@@ -60,14 +60,14 @@ void Demo::clipper2Demo()
 	// triangulation of union in one layer with earcut
 	GdstkUtils::MakeFracture(u_lib, 8190);
 	std::vector<Library> union_layer = { u_lib };
-	std::vector<earcutLayer> tris = Utils::EarcutTriangulation(union_layer);
-	Utils::WriteLayersObj(tris, (root_path + "triangulation_mono_couche_earcut.obj").c_str());
+	std::vector<earcutLayer> tris = TrisUtils::EarcutTriangulation(union_layer);
+	TrisUtils::WriteLayersObj(tris, (root_path + "triangulation_mono_couche_earcut.obj").c_str());
 	tris.clear();
 
 	// triangulation of union in several layers with earcut
 	std::vector<Library> union_layers = Clipper2Utils::ConvertPolyTreeDToGdsiiLayers(u);
-	tris = Utils::EarcutTriangulation(union_layers);
-	Utils::WriteLayersObj(tris, (root_path + "triangulation_multi_couches_earcut.obj").c_str());
+	tris = TrisUtils::EarcutTriangulation(union_layers);
+	TrisUtils::WriteLayersObj(tris, (root_path + "triangulation_multi_couches_earcut.obj").c_str());
 
 	u_lib.free_all();
 }
@@ -369,16 +369,16 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	/// 1: triangulate every layers
 	//const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
 	const char* svg_filepath = "C:/Users/PC/Desktop/poc/004672-647720058a0 (1).top_LAYERS.svg";
-	std::vector<earcutPolys> polys_layers = Utils::ConvertSVGToEarcutLayers(svg_filepath);
+	std::vector<earcutPolys> polys_layers = TrisUtils::ConvertSVGToEarcutLayers(svg_filepath);
 	std::vector<earcutLayer> triangulation_layers;
 
 	for (earcutPolys& polys : polys_layers)
 	{
-		earcutLayer tri_layer = Utils::earcutTriangulation(polys);
+		earcutLayer tri_layer = TrisUtils::earcutTriangulation(polys);
 		triangulation_layers.push_back(tri_layer);
 	}
 
-	Utils::Triangulation t = Utils::convertEarcutLayersToPointer(triangulation_layers);
+	Triangulation t = TrisUtils::convertEarcutLayersToPointer(triangulation_layers);
 
 	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
 	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
@@ -386,10 +386,10 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 
 	/// 2: scale triangles to simplify rasterization
 	float scale = std::max(img_dim.x, img_dim.y);
-	Utils::ScaleTriangulation(t, scale);
+	TrisUtils::ScaleTriangulation(t, scale);
 
 	/// 3: gpu memory allocation of vertices, triangles and the polarity of the triangles
-	Utils::Triangulation dtriangulation;
+	Triangulation dtriangulation;
 	auto start = std::chrono::steady_clock::now();
 
 	printf("Vertices: %0.2f Mo\n", (float)(t.nb_vertices * sizeof(float2)) / 1e6f);
@@ -418,7 +418,7 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	/// 5: warp and rasterize circuit
 	//CudaCall::Warping(dtriangulation, src_dst_boxes);
 	unsigned char* img = CudaCall::Rasterization(dtriangulation, scale, img_dim);
-	CudaCall::saveToBmp(
+	CudaCall::SaveToBmp(
 		("C:/Users/PC/Desktop/poc/rasterization_" + std::to_string(dpi) + "dpi.bmp").c_str(), 
 		img_dim.x, img_dim.y, 
 		img);

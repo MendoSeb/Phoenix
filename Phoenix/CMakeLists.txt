@@ -10,7 +10,6 @@ find_package(ZLIB REQUIRED)
 find_package(Qhull REQUIRED)
 find_package(CUDAToolkit 12.4 REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(TIFF REQUIRED)
 find_package(Freetype REQUIRED)
 find_package(tinyxml CONFIG REQUIRED)
 
@@ -81,7 +80,6 @@ target_link_libraries(executable PRIVATE
     CUDA::cudart
     CUDA::cuda_driver
     Eigen3::Eigen
-    TIFF::TIFF
     Freetype::Freetype
     unofficial-tinyxml::unofficial-tinyxml
 )

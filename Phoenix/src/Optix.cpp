@@ -15,7 +15,7 @@
 #include <gdstk/vec.hpp>
 #include <bitset>
 #include <GdstkUtils.h>
-#include <Utilities.h>
+#include "TriangulationUtils.h"
 
 
 Optix::Optix(int width, int height) : width(width), height(height)

@@ -16,18 +16,19 @@
 typedef unsigned int uint;
 
 
-namespace Utils
+struct Triangulation
 {
-    struct Triangulation
-    {
-        float2* v = nullptr;
-        uint3* t = nullptr;
-        unsigned char* p = nullptr;
-        size_t nb_vertices = 0;
-        size_t nb_triangles = 0;
-        std::vector<std::pair<int, int>> layers_range;
-    };
+    float2* v = nullptr;
+    uint3* t = nullptr;
+    unsigned char* p = nullptr;
+    size_t nb_vertices = 0;
+    size_t nb_triangles = 0;
+    std::vector<std::pair<int, int>> layers_range;
+};
 
+
+namespace TrisUtils
+{
     /* Applique la triangulation earcut à une série de liste de polygones de type gdstk */
     std::vector<earcutLayer> EarcutTriangulation(std::vector<Library>& layers);
 
@@ -44,7 +45,8 @@ namespace Utils
     // convertit N couches de triangles en allocation dans le tas en un tableau
     Triangulation convertEarcutLayersToPointer(std::vector<earcutLayer>& triangulation_layers);
 
-    void ScaleTriangulation(Utils::Triangulation& triangulation, float& scale);
+    // Normalise la triangulation entre (0, 0) et (scale, scale) sans modifier les échelles
+    void ScaleTriangulation(Triangulation& triangulation, float& scale);
 
     /* Sauvegarde des séries de liste de polygones de type earcut en .obj */
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename);
