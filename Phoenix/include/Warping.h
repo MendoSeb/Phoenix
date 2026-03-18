@@ -11,11 +11,7 @@ using namespace gdstk;
 
 namespace Warping
 {
-    std::vector<earcutPoly> getPolygonsInBox(const Library& lib, const Polygon* box);
-
     Eigen::Matrix3d getPerspectiveMatrixTransform(const float2 src[4], const float2 dst[4]);
-
-    void applyMatrixToPolygons(Eigen::Matrix3d& m, std::vector<earcutPoly>& polys);
 
     // boite représentant la boite cible et sa destination réelle
     struct Boxes {
