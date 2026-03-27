@@ -2,6 +2,7 @@
 #include "TriangulationUtils.h"
 #include <GdstkUtils.h>
 #include "RasterizationStep.h"
+#include <thread>
 
 
 std::vector<earcutLayer> TrisUtils::EarcutTriangulation(std::vector<Library>& layers)
@@ -221,12 +222,12 @@ std::pair<std::pair<float2*, uint3*>, uint2> TrisUtils::convertEarcutLayerToPoin
     return { {hv, ht}, count };
 }
 
-Triangulation TrisUtils::convertEarcutLayersToPointer(std::vector<earcutLayer>& triangulation_layers)
+TrisUtils::Triangulation TrisUtils::convertEarcutLayersToPointer(std::vector<earcutLayer>& triangulation_layers)
 {
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     /// count vertices and triangles
-    Triangulation t;
+    TrisUtils::Triangulation t;
 
     for (earcutLayer& layer : triangulation_layers)
     {
@@ -325,6 +326,23 @@ void TrisUtils::ScaleTriangulation(Triangulation& triangulation, float& scale)
 
     auto end = std::chrono::steady_clock::now();
     std::cout << "! Scaling en : " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
+
+    min_x = FLT_MAX;
+    min_y = FLT_MAX;
+    max_x = -FLT_MAX;
+    max_y = -FLT_MAX;
+
+    // find min and max coordinates
+    for (int vertice_i = 0; vertice_i < triangulation.nb_vertices; vertice_i++)
+    {
+        min_x = std::min(min_x, triangulation.v[vertice_i].x);
+        min_y = std::min(min_y, triangulation.v[vertice_i].y);
+
+        max_x = std::max(max_x, triangulation.v[vertice_i].x);
+        max_y = std::max(max_y, triangulation.v[vertice_i].y);
+    }
+
+    printf("%f, %f, %f, %f\n", min_x, max_x, min_y, max_y);
 }
 
 void TrisUtils::WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)
@@ -431,21 +449,39 @@ void TrisUtils::WriteLibraryToObj(const std::vector<Library>& layers, const char
     file.close();
 }
 
-void TrisUtils::writeObj(const char* file_name, float2* vertices, uint3* triangles,
-    size_t nb_v, size_t nb_tris)
+void TrisUtils::WriteObj(const char* file_name, Triangulation& tris)
 {
     std::ofstream file(file_name);
+    std::vector<float> vertices_z(tris.nb_vertices, 0);
 
-    for (size_t i = 0; i < nb_v; i++)
+    // change vertices z depending on layer number
+    float layer_number = 0;
+
+    for (std::pair<int, int>& layer_range : tris.layers_range)
+    {
+        for (size_t i = layer_range.first; i < layer_range.second; i++)
+        {
+            vertices_z[tris.t[i].x] = layer_number;
+            vertices_z[tris.t[i].y] = layer_number;
+            vertices_z[tris.t[i].z] = layer_number;
+        }
+
+        layer_number += 1.0f;
+    }
+
+    // save vertices
+    for (size_t i = 0; i < tris.nb_vertices; i++)
         file << "v " 
-        << std::to_string(vertices[i].x) << " " 
-        << std::to_string(vertices[i].y) << " 0.0\n";
+        << std::to_string(tris.v[i].x) << " " 
+        << std::to_string(tris.v[i].y) << " "
+        << std::to_string(vertices_z[i]) << "\n";
 
-    for (size_t i = 0; i < nb_tris; i++)
-        file << "f " 
-        << std::to_string(triangles[i].x + 1) << " "
-        << std::to_string(triangles[i].y + 1) << " "
-        << std::to_string(triangles[i].z + 1) << "\n";
+    // save traingles
+    for (size_t i = 0; i < tris.nb_triangles; i++)
+        file << "f "
+        << std::to_string(tris.t[i].x + 1) << " "
+        << std::to_string(tris.t[i].y + 1) << " "
+        << std::to_string(tris.t[i].z + 1) << "\n";
 
     file.close();
 

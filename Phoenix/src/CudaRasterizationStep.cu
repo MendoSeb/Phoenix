@@ -5,6 +5,7 @@
 #include <device_launch_parameters.h>
 #include <chrono>
 #include <iostream>
+#include "tinyxml.h"
 
 
 using namespace RasterizationStep;
@@ -22,8 +23,8 @@ __device__ bool IsPointInTriangle(const float2& pixel, float2 (&tri)[3])
 	float d2 = sign(pixel.x, pixel.y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
 	float d3 = sign(pixel.x, pixel.y, tri[2].x, tri[2].y, tri[0].x, tri[0].y);
 
-	bool has_neg = (d1 <= 0) || (d2 <= 0) || (d3 <= 0);
-	bool has_pos = (d1 >= 0) || (d2 >= 0) || (d3 >= 0);
+	bool has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+	bool has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
 
 	// Le résultat est vrai si on n'a pas à la fois du positif et du négatif
 	// (ce qui couvre aussi le cas où l'un des d est à 0 : point sur l'arête)
@@ -104,7 +105,7 @@ __device__ float4 getTriangleBoundingBox(float2 (&tri)[3])
 
 // étape 1 de la rastérisation, connaitre pour chaque tuile le nombre de triangles qui les touchent
 __global__ void TileCount(
-	Triangulation dtriangulation,
+	TrisUtils::Triangulation dtriangulation,
 	Tile* dtiles,
 	int nb_tiles,
 	uint2 tiles_dim,
@@ -143,7 +144,7 @@ __global__ void TileCount(
 
 // étape 2 de la rastérisation, affecter pour chaque tuile les indices des triangles qui les touchent
 __global__ void TileAssociate(
-	Triangulation dtriangulation,
+	TrisUtils::Triangulation dtriangulation,
 	Tile* dtiles,
 	int nb_tiles,
 	int* d_indices,
@@ -188,7 +189,7 @@ __global__ void TileAssociate(
 
 // Kernel de rastérisation, utilises TileCount et TileAssociate
 __global__ void RasterizationKernel(
-	Triangulation dtriangulation,
+	TrisUtils::Triangulation dtriangulation,
 	Tile* dtiles,
 	uint2 tiles_dim,
 	int tile_size,
@@ -203,7 +204,7 @@ __global__ void RasterizationKernel(
 	int thread_local_id = threadIdx.y * blockDim.x + threadIdx.x;
 	int pixel_index = thread_y * img_dim.x + thread_x;
 
-	if (pixel_index < 0 || pixel_index >= img_dim.x * img_dim.y) 
+	if (thread_x < 0 || thread_x >= img_dim.x || thread_y < 0 || thread_y >= img_dim.y)
 		return;
 
 	int tile_index = std::floor((float)thread_x / tile_size) * tiles_dim.y
@@ -227,10 +228,11 @@ __global__ void RasterizationKernel(
 	__shared__ unsigned char triangles_polarity[chunk_size];
 	__shared__ unsigned char tile_img[32][32];
 
-	tile_img[threadIdx.y][threadIdx.x] = 0;
+	tile_img[threadIdx.y][threadIdx.x] = 100;
 
 	for (int i = 0; i < nb_chunk; i++)
 	{
+		// triangle's indice in global array
 		int index = tile.offset + (i * chunk_size) + thread_local_id;
 
 		if (index >= 0 && index < nb_indices && dindices[index] != -1)
@@ -249,10 +251,7 @@ __global__ void RasterizationKernel(
 		if (!pixel_hit)
 		{
 			// count valid triangles
-			int nb_tris = chunk_size;
-
-			if (nb_tris > tile.count - (i * chunk_size))
-				nb_tris = tile.count - (i * chunk_size);
+			int nb_tris = fminf(chunk_size, tile.count - i * chunk_size);
 
 			for (int k = 0; k < nb_tris; k++)
 			{
@@ -313,6 +312,7 @@ std::vector<earcutPolys> RasterizationStep::ConvertSVGToEarcutLayers(const char*
 		earcutPoly poly;
 		poly.push_back({});
 
+		// read all the coordinates of the current path
 		while (getline(full_string, x_coordinate, delimiter)
 			&& getline(full_string, y_coordinate, delimiter))
 		{
@@ -341,7 +341,7 @@ std::vector<earcutPolys> RasterizationStep::ConvertSVGToEarcutLayers(const char*
 // Appliquer la déformation sur une triangulation
 void RasterizationStep::Warping
 (
-	Triangulation dtriangulation,
+	TrisUtils::Triangulation dtriangulation,
 	std::vector<Warping::Boxes>& src_dst
 )
 {
@@ -393,7 +393,7 @@ void RasterizationStep::Warping
 
 // Rastérise une triangulation
 unsigned char* RasterizationStep::Rasterization(
-	Triangulation& dtriangulation,
+	TrisUtils::Triangulation& dtriangulation,
 	double scale,
 	uint2 img_dim
 )

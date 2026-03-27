@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <optix_types.h>
 #include <cuda.h>
+#include <TriangulationUtils.h>
 
 
 #pragma pack(push, 1)
@@ -34,6 +35,7 @@ struct BitmapInfoHeader {
     uint32_t colors_important{ 0 };
 };
 #pragma pack(pop)
+
 
 namespace optix_struct
 {
@@ -66,11 +68,14 @@ struct HitGroupData
 
 struct Params
 {
-    unsigned char*         image;
+    unsigned char* image;
     unsigned int           image_width;
     unsigned int           image_height;
     unsigned int           total_pixels;
-    unsigned int           sp;
+
+    unsigned char* polarity;
+    float2* distorsion;
+
     unsigned int           y_sp_index;
     unsigned int           x_sp_index;
     float                  min_x;
@@ -212,6 +217,7 @@ private:
     OptixShaderBindingTable sbt = {};
 
 public:
+
 	Optix(int width, int height);
 
     ~Optix();
@@ -235,17 +241,12 @@ public:
     void initPipeline(CUdeviceptr d_tris);
 
     /* Charge un .obj et l'envoie sur GPU */
-    CUdeviceptr initScene();
+    CUdeviceptr initScene(TrisUtils::Triangulation& tris);
 
     /* Rendu de l'image */
-    void render();
+    void render(TrisUtils::Triangulation& tris);
 
-    /* Simule le déplacement d'un DMD pour faire la sous-pixelisation */
-	void DMDSimulation();
-
-    // Deplacement du dmd (de la caméra) et renvoie à chaque lancer de rayon le résultat
-    // avec du double buffering
-    void DMDSimulationV2();
+    float2* CreateDistorsionArray();
 
     /* Sauvegarde l'image en .bmp */
     void saveToBmp(const std::string& filename, int width, int height, unsigned char* hostData);

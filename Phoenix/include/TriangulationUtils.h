@@ -8,35 +8,35 @@
 
 #include <earcut.hpp>
 #include <GdstkUtils.h>
-#include <Clipper2Utils.h>
 #include <vector_functions.h>
-#include "tinyxml.h"
 
 
 typedef unsigned int uint;
 
 
-struct Triangulation
-{
-    float2* v = nullptr;
-    uint3* t = nullptr;
-    unsigned char* p = nullptr;
-    size_t nb_vertices = 0;
-    size_t nb_triangles = 0;
-    std::vector<std::pair<int, int>> layers_range;
-};
-
-
 namespace TrisUtils
 {
-    /* Applique la triangulation earcut à une série de liste de polygones de type gdstk */
+    struct Triangulation
+    {
+        float2* v = nullptr;
+        uint3* t = nullptr;
+        unsigned char* p = nullptr;
+        size_t nb_vertices = 0;
+        size_t nb_triangles = 0;
+        std::vector<std::pair<int, int>> layers_range;
+    };
+
+
+    // Applique la triangulation earcut à une série de liste de polygones de type gdstk
     std::vector<earcutLayer> EarcutTriangulation(std::vector<Library>& layers);
 
-    /* Applique la triangulation earcut à une série de liste de polygones earcut */
+    // Applique la triangulation earcut à une série de liste de polygones earcut
     earcutLayer earcutTriangulation(earcutPolys& polys);
 
+    // Triangule un .gds avec earcut avec NB_THREADS threads
     earcutLayer earcutTriangulation(const Library& lib, const uint&& NB_THREADS);
 
+    // Conversion polygon gdstk -> polygone earcut
     earcutPoly convertGdstkToEarcutPoly(const gdstk::Polygon* poly);
 
     // convertit une seule couche de triangles en allocation dans le tas
@@ -48,12 +48,12 @@ namespace TrisUtils
     // Normalise la triangulation entre (0, 0) et (scale, scale) sans modifier les échelles
     void ScaleTriangulation(Triangulation& triangulation, float& scale);
 
-    /* Sauvegarde des séries de liste de polygones de type earcut en .obj */
+    // Sauvegarde des séries de liste de polygones de type earcut en .obj
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename);
 
-    /* Sauvegarde des séries de liste de polygones de type gdstk en .obj */
+    // Sauvegarde des séries de liste de polygones de type gdstk en .obj
     void WriteLibraryToObj(const std::vector<Library>& layers, const char* filename);
 
-    void writeObj(const char* file_name, float2* vertices, uint3* triangles, 
-        size_t nb_v, size_t nb_tris);
+    // Enregistre une triangulation de la forme float2*, uint3* en .obj
+    void WriteObj(const char* file_name, Triangulation& tris);
 }

@@ -1,8 +1,8 @@
 #pragma once
 #include <vector>
 #include <GdstkUtils.h>
-#include <Warping.h>
 #include <fstream>
+#include <Warping.h>
 #include "TriangulationUtils.h"
 
 
@@ -50,10 +50,10 @@ namespace RasterizationStep
 	std::vector<earcutPolys> ConvertSVGToEarcutLayers(const char* svg_filepath);
 
 	// Appliquer la déformation à une triangulation
-	void Warping(Triangulation dtriangulation, std::vector<Warping::Boxes>& src_dst);
+	void Warping(TrisUtils::Triangulation dtriangulation, std::vector<Warping::Boxes>& src_dst);
 
 	// Rastérise une triangulation
-	unsigned char* Rasterization(Triangulation& dtriangulation, double scale, uint2 img_dim);
+	unsigned char* Rasterization(TrisUtils::Triangulation& dtriangulation, double scale, uint2 img_dim);
 
 	// Sauvegarde "img" en .bmp
 	void SaveToBmp(const std::string& filename, int width, int height,

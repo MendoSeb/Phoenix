@@ -74,14 +74,34 @@ void Demo::clipper2Demo()
 
 void Demo::optixDemo()
 {
-	Optix o(10000, 10000); // 4096, 2176
+	const char* svg_filepath = "C:/Users/PC/Desktop/poc/test3.svg";
+	std::vector<earcutPolys> polys_layers = RasterizationStep::ConvertSVGToEarcutLayers(svg_filepath);
+	std::vector<earcutLayer> triangulation_layers;
+
+	for (earcutPolys& polys : polys_layers)
+	{
+		earcutLayer tri_layer = TrisUtils::earcutTriangulation(polys);
+		triangulation_layers.push_back(tri_layer);
+	}
+
+	TrisUtils::Triangulation t = TrisUtils::convertEarcutLayersToPointer(triangulation_layers);
+	float scale = 1000.0f;
+	TrisUtils::ScaleTriangulation(t, scale);
+
+	//TrisUtils::WriteObj("C:/Users/PC/Desktop/poc/temp.obj", t);
+
+	Optix o(scale, scale);
 	o.init();
 	o.loadShaders();
 
-	CUdeviceptr d_tris = o.initScene();
+	CUdeviceptr d_tris = o.initScene(t);
 	o.initPipeline(d_tris);
 
-	o.render();
+	o.render(t);
+
+	cudaFree(t.v);
+	cudaFree(t.t);
+	cudaFree(t.p);
 
 	//o.DMDSimulation();
 	//o.DMDSimulationV2();
@@ -368,7 +388,8 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 
 	/// 1: triangulate every layers
 	//const char* svg_filepath = "C:/Users/PC/Desktop/poc/test.svg";
-	const char* svg_filepath = "C:/Users/PC/Desktop/poc/004672-647720058a0 (1).top_LAYERS.svg";
+	//const char* svg_filepath = "C:/Users/PC/Desktop/poc/004672-647720058a0 (1).top_LAYERS.svg";
+	const char* svg_filepath = "C:/Users/PC/Desktop/poc/test3.svg";
 	std::vector<earcutPolys> polys_layers = RasterizationStep::ConvertSVGToEarcutLayers(svg_filepath);
 	std::vector<earcutLayer> triangulation_layers;
 
@@ -378,7 +399,7 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 		triangulation_layers.push_back(tri_layer);
 	}
 
-	Triangulation t = TrisUtils::convertEarcutLayersToPointer(triangulation_layers);
+	TrisUtils::Triangulation t = TrisUtils::convertEarcutLayersToPointer(triangulation_layers);
 
 	uint2 img_dim = { (int)circuit_inch_size.x * dpi, (int)circuit_inch_size.y * dpi };
 	printf("Image dimension: %i x %i\n", img_dim.x, img_dim.y);
@@ -389,8 +410,10 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	TrisUtils::ScaleTriangulation(t, scale);
 
 	/// 3: gpu memory allocation of vertices, triangles and the polarity of the triangles
-	Triangulation dtriangulation;
+	TrisUtils::Triangulation dtriangulation;
 	auto start = std::chrono::steady_clock::now();
+
+	TrisUtils::WriteObj("C:/Users/PC/Desktop/poc/test3.obj", t);
 
 	printf("Vertices: %0.2f Mo\n", (float)(t.nb_vertices * sizeof(float2)) / 1e6f);
 	printf("Triangles: %0.2f Mo\n", (float)(t.nb_triangles * sizeof(uint3)) / 1e6f);

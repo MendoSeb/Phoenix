@@ -17,7 +17,7 @@ int main()
 	//clipper2Demo();
 	//gdstkDemo();
 
-	//optixDemo();
+	optixDemo();
 
 	//warpingDemo1();
 	//warpingDemo2();
@@ -34,7 +34,10 @@ int main()
 
 	float inch_x = (26.3f * 2.0f) / 2.54f; // pour le circuit 58a0
 	float inch_y = (16.8f * 3.5f) / 2.54f;
-	MultiLayerRasterization({ inch_x, inch_y }, 100);
+
+	inch_x = 9.5;
+	inch_y = 9.5;
+	//MultiLayerRasterization({ inch_x, inch_y }, 300);
 
 	//FreeType ft;
 	//ft.StringToPolygons("abcdefghijklmnopqrstuvwxyz\nABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890");
