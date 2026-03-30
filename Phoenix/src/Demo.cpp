@@ -85,7 +85,7 @@ void Demo::optixDemo()
 	}
 
 	TrisUtils::Triangulation t = TrisUtils::convertEarcutLayersToPointer(triangulation_layers);
-	float scale = 1000.0f;
+	float scale = 10000.0f;
 	TrisUtils::ScaleTriangulation(t, scale);
 
 	//TrisUtils::WriteObj("C:/Users/PC/Desktop/poc/temp.obj", t);

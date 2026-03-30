@@ -430,80 +430,68 @@ void Optix::render(TrisUtils::Triangulation& tris)
 
 float2* Optix::CreateDistorsionArray()
 {
-	int nb_samples_x = 20;
-	int nb_samples_y = 20;
+	const int nb_samples_x = 8; // 2 vrais, 2 dupliqués
+	const int nb_samples_y = 8;
 
-	float sample_size_w = (float)width / nb_samples_x;
-	float sample_size_h = (float)height / nb_samples_y;
+	float sample_size_w = (float)width / (nb_samples_x - 1);
+	float sample_size_h = (float)height / (nb_samples_y - 1);
 
-	float2* distorsion = new float2[nb_samples_x * nb_samples_y]; // distorsion samples
+	float2 distorsion[nb_samples_x][nb_samples_y]; // distorsion samples
 	float2* distorsion_i = new float2[width * height]; // for every pixel, interpolated
 
-	float2 center{(float)width / 2.0f, (float)height / 2.0f};
-	float norme = sqrt(pow((float)width / 2.0f, 2) + pow((float)height / 2.0f, 2));
+	float norme = sqrt(pow(width / 2.0f, 2) + pow(height / 2.0f, 2));
 
-	// set distorsion samples
 	for (int x = 0; x < nb_samples_x; x++) {
 		for (int y = 0; y < nb_samples_y; y++)
 		{
-			float2 pixel{ (float)(x + 0.5f) * sample_size_w, (float)(y + 0.5f) * sample_size_h };
+			distorsion[y][x] = {
+				(x * sample_size_w) - (width / 2.0f),
+				(y * sample_size_h) - (height / 2.0f)
+			};
 
-			float2 res{ pixel.x - center.x, pixel.y - center.y };
-			float l = sqrt(res.x*res.x + res.y*res.y) / norme + 1.0f;
-			res = float2{ (res.x / norme) * powf(l, 4.0f), (res.y / norme) * powf(l, 4.0f) };
+			float l = sqrt(pow(distorsion[y][x].x, 2) + pow(distorsion[y][x].y, 2)) / norme + 1.0f;
+			distorsion[y][x].x = (distorsion[y][x].x / norme) * pow(l, 4);
+			distorsion[y][x].y = (distorsion[y][x].y / norme) * pow(l, 4);
 
-			int index = y * nb_samples_x + x;
-			distorsion[index].x = res.x;
-			distorsion[index].y = res.y;
+			printf("%.1f %.1f, ", distorsion[y][x].x, distorsion[y][x].y);
 		}
+		printf("\n");
 	}
 
 	// interpolate distorsion for every pixel
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++)
 		{
-			int pixel_index = std::floor(y / sample_size_h) * nb_samples_x + std::floor(x / sample_size_w);
+			float2 pixel{ x, y };
 			int pixel_index_i = y * width + x;
 
-			// pixel is inside 4 samples
-			if (x >= sample_size_w && x <= width - sample_size_w
-				&& y >= sample_size_h && y <= height - sample_size_h)
-			{
-				int sample_1_index = std::floor(y / sample_size_h) * nb_samples_x + std::floor(x / sample_size_w);
-				int sample_2_index = std::floor(y / sample_size_h) * nb_samples_x + (std::floor(x / sample_size_w) + 1);
-				int sample_3_index = std::floor((y / sample_size_h) + 1) * nb_samples_x + std::floor(x / sample_size_w);
-				int sample_4_index = std::floor((y / sample_size_h) + 1) * nb_samples_x + (std::floor(x / sample_size_w) + 1);
+			// trouver les 4 marqueurs autour du pixel
+			uint2 sample_1_index = { std::floor(x / sample_size_w), std::floor(y / sample_size_h) };
+			uint2 sample_2_index = { std::floor(x / sample_size_w), std::floor(y / sample_size_h) + 1 };
+			uint2 sample_3_index = { std::floor(x / sample_size_w) + 1, std::floor(y / sample_size_h) };
+			uint2 sample_4_index = { std::floor(x / sample_size_w) + 1, std::floor(y / sample_size_h) + 1 };
 
-				float t_u = ((std::floor((float)x / sample_size_w + 1.0f) * sample_size_w) - x) / sample_size_w;
-				float t_v = ((std::floor((float)y / sample_size_h + 1.0f) * sample_size_h) - y) / sample_size_h;
+			// interpoler les valeurs en x et y de leur distorsion pour ce pixel
+			float t_u = (pixel.x - sample_1_index.x * sample_size_w) / sample_size_w;
+			float t_v = (pixel.y - sample_1_index.y * sample_size_h) / sample_size_h;
 
-				distorsion_i[pixel_index_i].x = 
-					(1.0f - t_v) * 
-					((1.0f - t_u) * distorsion[sample_1_index].x + t_u * distorsion[sample_2_index].x)
-					+ t_v * 
-					((1.0f - t_u) * distorsion[sample_3_index].x + t_u * distorsion[sample_4_index].x);
-			
-				distorsion_i[pixel_index_i].y =
-					(1.0f - t_v) *
-					((1.0f - t_u) * distorsion[sample_1_index].y + t_u * distorsion[sample_2_index].y)
-					+ t_v *
-					((1.0f - t_u) * distorsion[sample_3_index].y + t_u * distorsion[sample_4_index].y);
-			}
-			else
-			{
-				distorsion_i[pixel_index_i] = { 0.0f, 0.0f };
-			}
+			distorsion_i[pixel_index_i].x =
+				(1.0f - t_v) *
+				((1.0f - t_u) * distorsion[sample_1_index.y][sample_1_index.x].x
+					+ t_u * distorsion[sample_3_index.y][sample_3_index.x].x)
+				+ t_v *
+				((1.0f - t_u) * distorsion[sample_2_index.y][sample_2_index.x].x
+					+ t_u * distorsion[sample_4_index.y][sample_4_index.x].x);
+
+			distorsion_i[pixel_index_i].y =
+				(1.0f - t_v) *
+				((1.0f - t_u) * distorsion[sample_1_index.y][sample_1_index.x].y
+					+ t_u * distorsion[sample_3_index.y][sample_3_index.x].y)
+				+ t_v *
+				((1.0f - t_u) * distorsion[sample_2_index.y][sample_2_index.x].y
+					+ t_u * distorsion[sample_4_index.y][sample_4_index.x].y);
 		}
-	}
-
-	/*for (int x = 0; x < width; x++)
-	{
-		for (int y = 0; y < height; y++)
-			std::cout << distorsion_i[y * width + x].x << ", " 
-			<< distorsion_i[y * height + x].y << " ";
-
-		printf("\n");
-	}*/
+	}	
 
 	return distorsion_i;
 }
