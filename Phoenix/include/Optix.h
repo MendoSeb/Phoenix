@@ -10,6 +10,7 @@
 #include <optix_types.h>
 #include <cuda.h>
 #include <TriangulationUtils.h>
+#include <SimulationParams.h>
 
 
 #pragma pack(push, 1)
@@ -67,21 +68,22 @@ struct HitGroupData
 
 
 struct Params
-{
-    unsigned char* image;
+{   
+    float* image;
     unsigned int           image_width;
     unsigned int           image_height;
     unsigned int           total_pixels;
 
     unsigned char* polarity;
     float2* distorsion;
+    float* luminance_matrix;
+    unsigned char* luminance_correction;
 
     unsigned int           y_sp_index;
     unsigned int           x_sp_index;
     float                  min_x;
     float                  min_y;
-    float3                 cam_eye; // position de la caméra
-    float3                 cam_u, cam_v, cam_w; // orientation de la caméra
+    float3                 cam_position; // position de la caméra/dmd
     OptixTraversableHandle handle;
 };
 
@@ -246,8 +248,17 @@ public:
     /* Rendu de l'image */
     void render(TrisUtils::Triangulation& tris);
 
+    template <size_t nb_samples_x, size_t nb_samples_y>
+    float2** CreateDistorsionSamples();
+
     float2* CreateDistorsionArray();
 
     /* Sauvegarde l'image en .bmp */
     void saveToBmp(const std::string& filename, int width, int height, unsigned char* hostData);
+
+    void DISimulation(
+        SimulationParams& p, 
+        TrisUtils::Triangulation& tris, 
+        float* luminance_matrix,
+        unsigned char* luminance_correction);
 };

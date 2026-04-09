@@ -81,7 +81,7 @@ PathsD FreeType::CharacterToPolygons(const char c)
 	FT_Error error = FT_Load_Glyph(
 		face,          /* handle to face object */
 		glyph_index,   /* glyph index           */
-		FT_LOAD_NO_HINTING); // poiur indiquer de ne pas placer les points par rapport aux pixels
+		FT_LOAD_NO_HINTING); // pour indiquer de ne pas placer les points par rapport aux pixels
 
 	// functions for decomposition
 	FT_Outline_Funcs funcs;

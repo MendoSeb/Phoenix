@@ -26,7 +26,6 @@ namespace TrisUtils
         std::vector<std::pair<int, int>> layers_range;
     };
 
-
     // Applique la triangulation earcut à une série de liste de polygones de type gdstk
     std::vector<earcutLayer> EarcutTriangulation(std::vector<Library>& layers);
 
@@ -47,6 +46,8 @@ namespace TrisUtils
 
     // Normalise la triangulation entre (0, 0) et (scale, scale) sans modifier les échelles
     void ScaleTriangulation(Triangulation& triangulation, float& scale);
+
+    TrisUtils::Triangulation LoadTriangulationLayersFromSVG(const char* svg_filepath, float scale);
 
     // Sauvegarde des séries de liste de polygones de type earcut en .obj
     void WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename);

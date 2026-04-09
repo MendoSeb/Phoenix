@@ -252,7 +252,7 @@ TrisUtils::Triangulation TrisUtils::convertEarcutLayersToPointer(std::vector<ear
     auto end2 = std::chrono::steady_clock::now();
     std::cout << "! allocation ram en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start).count() << " ms" << std::endl;
 
-    /// assign values to vertices and triangles and polarity array
+    /// assign values to vertices, triangles and polarity arrays
     size_t vertex_index = 0;
     size_t triangle_index = 0;
     size_t indices_count = 0;
@@ -343,6 +343,23 @@ void TrisUtils::ScaleTriangulation(Triangulation& triangulation, float& scale)
     }
 
     printf("%f, %f, %f, %f\n", min_x, max_x, min_y, max_y);
+}
+
+TrisUtils::Triangulation TrisUtils::LoadTriangulationLayersFromSVG(const char* svg_filepath, float scale)
+{
+    std::vector<earcutPolys> polys_layers = RasterizationStep::ConvertSVGToEarcutLayers(svg_filepath);
+    std::vector<earcutLayer> triangulation_layers;
+
+    for (earcutPolys& polys : polys_layers)
+    {
+        earcutLayer tri_layer = TrisUtils::earcutTriangulation(polys);
+        triangulation_layers.push_back(tri_layer);
+    }
+
+    TrisUtils::Triangulation t = TrisUtils::convertEarcutLayersToPointer(triangulation_layers);
+    TrisUtils::ScaleTriangulation(t, scale);
+
+    return t;
 }
 
 void TrisUtils::WriteLayersObj(std::vector<earcutLayer>& layers, const char* filename)

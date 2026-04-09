@@ -280,7 +280,7 @@ CUdeviceptr Optix::initScene(TrisUtils::Triangulation& t)
 
 	//loadObj("C:/Users/PC/Desktop/poc/test3.obj", vertices, triangles, nb_v, nb_f);
 	float3* vertices = new float3[t.nb_vertices];
-	int nb_layer = 0;
+	float nb_layer = 0;
 
 	for (auto& layer_range : t.layers_range)
 	{
@@ -377,8 +377,8 @@ void Optix::render(TrisUtils::Triangulation& tris)
 
 	Params params;
 
-	unsigned char* output_buffer_d;
-	CUDA_CHECK(cudaMalloc((void**)(&output_buffer_d), width * height * sizeof(unsigned char)));
+	float* output_buffer_d;
+	CUDA_CHECK(cudaMalloc((void**)(&output_buffer_d), width * height * sizeof(float)));
 	cudaMemset((void**)&output_buffer_d, 100, width * height);
 
 	params.image = output_buffer_d;
@@ -428,35 +428,58 @@ void Optix::render(TrisUtils::Triangulation& tris)
 	delete[] distorsion;
 }
 
-float2* Optix::CreateDistorsionArray()
+template <size_t nb_samples_x, size_t nb_samples_y>
+float2** Optix::CreateDistorsionSamples()
 {
-	const int nb_samples_x = 8; // 2 vrais, 2 dupliqués
-	const int nb_samples_y = 8;
-
 	float sample_size_w = (float)width / (nb_samples_x - 1);
 	float sample_size_h = (float)height / (nb_samples_y - 1);
-
-	float2 distorsion[nb_samples_x][nb_samples_y]; // distorsion samples
-	float2* distorsion_i = new float2[width * height]; // for every pixel, interpolated
-
 	float norme = sqrt(pow(width / 2.0f, 2) + pow(height / 2.0f, 2));
 
-	for (int x = 0; x < nb_samples_x; x++) {
-		for (int y = 0; y < nb_samples_y; y++)
+	float2** distorsion = new float2 * [nb_samples_y];
+
+	for (int y = 0; y < nb_samples_y; y++) {
+
+		distorsion[y] = new float2[nb_samples_x];
+
+		for (int x = 0; x < nb_samples_x; x++)
 		{
+			float tempx = x;
+			float tempy = y;
+
+			// pour dupliquer les valeurs sur les bords de l'image (pas de marqueur ici potentiellement)
+			/*if (x == 0) tempx = 1;
+			if (x == nb_samples_x - 1) tempx = nb_samples_x - 2;
+
+			if (y == 0) tempy = 1;
+			if (y == nb_samples_y - 1) tempy = nb_samples_y - 2;*/
+
 			distorsion[y][x] = {
-				(x * sample_size_w) - (width / 2.0f),
-				(y * sample_size_h) - (height / 2.0f)
+				(tempx * sample_size_w) - (width / 2.0f),
+				(tempy * sample_size_h) - (height / 2.0f)
 			};
 
 			float l = sqrt(pow(distorsion[y][x].x, 2) + pow(distorsion[y][x].y, 2)) / norme + 1.0f;
-			distorsion[y][x].x = (distorsion[y][x].x / norme) * pow(l, 4);
-			distorsion[y][x].y = (distorsion[y][x].y / norme) * pow(l, 4);
+			distorsion[y][x].x = (distorsion[y][x].x / norme) * pow(l, 8);
+			distorsion[y][x].y = (distorsion[y][x].y / norme) * pow(l, 8);
 
 			printf("%.1f %.1f, ", distorsion[y][x].x, distorsion[y][x].y);
 		}
 		printf("\n");
 	}
+
+	return distorsion;
+}
+
+float2* Optix::CreateDistorsionArray()
+{
+	const int nb_samples_x = 21; // 2 vrais, 2 dupliqués en réalité
+	const int nb_samples_y = 11;
+
+	float sample_size_w = (float)width / (nb_samples_x - 1);
+	float sample_size_h = (float)height / (nb_samples_y - 1);
+
+	float2** distorsion = CreateDistorsionSamples<nb_samples_x, nb_samples_y>();
+	float2* distorsion_i = new float2[width * height]; // for every pixel, interpolated
 
 	// interpolate distorsion for every pixel
 	for (int x = 0; x < width; x++) {
@@ -491,8 +514,9 @@ float2* Optix::CreateDistorsionArray()
 				((1.0f - t_u) * distorsion[sample_2_index.y][sample_2_index.x].y
 					+ t_u * distorsion[sample_4_index.y][sample_4_index.x].y);
 		}
-	}	
+	}
 
+	delete[] distorsion;
 	return distorsion_i;
 }
 
@@ -518,9 +542,9 @@ void Optix::saveToBmp(const std::string& filename, int width, int height,
 
 	std::vector<char> palette(palette_size);
 	for (int i = 0; i < 256; ++i) {
-		palette[i * 4 + 0] = 255 - i; // Blue
-		palette[i * 4 + 1] = 255 - i; // Green
-		palette[i * 4 + 2] = 255 - i; // Red
+		palette[i * 4 + 0] = i; // Blue
+		palette[i * 4 + 1] = i; // Green
+		palette[i * 4 + 2] = i; // Red
 		palette[i * 4 + 3] = 0;  // Reserved
 	}
 
@@ -541,4 +565,95 @@ void Optix::saveToBmp(const std::string& filename, int width, int height,
 
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	std::cout << "Sauvegarde en .bmp en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
+}
+
+void Optix::DISimulation(
+	SimulationParams& sp, 
+	TrisUtils::Triangulation& tris,
+	float* luminance_matrix,
+	unsigned char* luminance_correction
+)
+{
+	// set params for GPU
+	CUstream stream;
+	cudaStreamCreate(&stream);
+
+	// image on gpu
+	int nb_img_pixels_img = sp.img_width * sp.img_height;
+	int nb_img_pixels_dmd = sp.dmd_width * sp.dmd_height;
+
+	float* dimg;
+	cudaMalloc((void**)(&dimg), nb_img_pixels_img * sizeof(float));
+	cudaMemset(dimg, 0, nb_img_pixels_img);
+
+	float* dluminance_matrix;
+	cudaMalloc((void**)(&dluminance_matrix), nb_img_pixels_dmd * sizeof(float));
+	cudaMemcpy(dluminance_matrix, luminance_matrix, nb_img_pixels_dmd * sizeof(float), cudaMemcpyHostToDevice);
+
+	unsigned char* dluminance_correction;
+	cudaMalloc((void**)(&dluminance_correction), nb_img_pixels_dmd * sizeof(unsigned char));
+	cudaMemcpy(dluminance_correction, luminance_correction, nb_img_pixels_dmd * sizeof(signed char), cudaMemcpyHostToDevice);
+
+	Params hparam;
+	hparam.image = dimg;
+	hparam.image_width = sp.img_width;
+	hparam.image_height = sp.img_height;
+	hparam.total_pixels = nb_img_pixels_img;
+	hparam.cam_position = float3{ 0.0f, -2176.0f, 10.0f };
+
+	hparam.luminance_matrix = dluminance_matrix;
+	hparam.luminance_correction = dluminance_correction;
+	hparam.handle = gas_handle;
+
+	cudaMalloc((void**)&hparam.polarity, tris.nb_triangles * sizeof(unsigned char));
+	cudaMemcpy(hparam.polarity, tris.p, tris.nb_triangles * sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+	CUdeviceptr d_param;
+	cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
+
+	// launch
+	float2 dmd_vector;
+	dmd_vector.x = 1.0f / 2176.0f; // quand le dmd avance d'un pixel en y il avance d'1/2176 en x
+	dmd_vector.y = 1.0f + 1.0f / 2176.0f;
+
+	int nb_step = sp.img_height + sp.dmd_height;
+
+	for (int i = 0; i < nb_step; i++)
+	{
+		cudaMemcpy(reinterpret_cast<void*>(d_param), &hparam, sizeof(hparam), cudaMemcpyHostToDevice);
+
+		optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, sp.dmd_width, sp.dmd_height, 1);
+		cudaDeviceSynchronize();
+
+		// move DMD
+		hparam.cam_position.x += dmd_vector.x;
+		hparam.cam_position.y += dmd_vector.y;
+	}
+
+	float* himg = new float[nb_img_pixels_img];
+	cudaMemcpy(himg, dimg, nb_img_pixels_img * sizeof(float), cudaMemcpyDeviceToHost);
+
+	// convert from float image to unsigned char
+	unsigned char* uc_img = new unsigned char[nb_img_pixels_img];
+
+	// find max value to normalize
+	float max_value = 0;
+
+	for (int i = 0; i < nb_img_pixels_img; i++)
+		if (himg[i] > max_value)
+			max_value = himg[i];
+	
+	for (int i = 0; i < nb_img_pixels_img; i++)
+		uc_img[i] = (himg[i] / max_value) * 255.0f;
+
+	saveToBmp("C:/Users/PC/Desktop/poc/DirectImagingSimulation.bmp",
+		sp.img_width, sp.img_height, uc_img);
+
+	delete[] uc_img;
+	delete[] himg;
+	cudaFree(dimg);
+	cudaFree(dluminance_matrix);
+	cudaFree(dluminance_correction);
+	cudaFree(&d_param);
+	cudaStreamDestroy(stream);
 }
