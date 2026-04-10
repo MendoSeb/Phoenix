@@ -360,6 +360,8 @@ CUdeviceptr Optix::initScene(TrisUtils::Triangulation& t)
 		0                   // num emitted properties
 	));
 
+	CUDA_CHECK(cudaDeviceSynchronize());
+
 	cudaFree(reinterpret_cast<void*>(d_temp_buffer_gas));
 	cudaFree(reinterpret_cast<void*>(d_vertices));
 	delete[] vertices;
@@ -371,9 +373,8 @@ CUdeviceptr Optix::initScene(TrisUtils::Triangulation& t)
 
 void Optix::render(TrisUtils::Triangulation& tris)
 {
-	CUstream stream, streamcpy;
+	CUstream stream;
 	cudaStreamCreate(&stream);
-	cudaStreamCreate(&streamcpy);
 
 	Params params;
 
@@ -382,9 +383,8 @@ void Optix::render(TrisUtils::Triangulation& tris)
 	cudaMemset((void**)&output_buffer_d, 100, width * height);
 
 	params.image = output_buffer_d;
-	params.image_width = width;
-	params.image_height = height;
-	params.total_pixels = width * height;
+	params.dmd_width = width;
+	params.dmd_height = height;
 
 	// triangles polarity
 	cudaMalloc((void**)&params.polarity, tris.nb_triangles * sizeof(unsigned char));
@@ -520,6 +520,11 @@ float2* Optix::CreateDistorsionArray()
 	return distorsion_i;
 }
 
+OptixTraversableHandle Optix::GetGasHandle()
+{
+	return gas_handle;
+}
+
 void Optix::saveToBmp(const std::string& filename, int width, int height,
 	unsigned char* hostData)
 {
@@ -567,93 +572,13 @@ void Optix::saveToBmp(const std::string& filename, int width, int height,
 	std::cout << "Sauvegarde en .bmp en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << " ms" << std::endl;
 }
 
-void Optix::DISimulation(
-	SimulationParams& sp, 
-	TrisUtils::Triangulation& tris,
-	float* luminance_matrix,
-	unsigned char* luminance_correction
+void Optix::RayCasting(
+	int dmd_width,
+	int dmd_height,
+	CUstream& stream,
+	CUdeviceptr& dparam
 )
 {
-	// set params for GPU
-	CUstream stream;
-	cudaStreamCreate(&stream);
-
-	// image on gpu
-	int nb_img_pixels_img = sp.img_width * sp.img_height;
-	int nb_img_pixels_dmd = sp.dmd_width * sp.dmd_height;
-
-	float* dimg;
-	cudaMalloc((void**)(&dimg), nb_img_pixels_img * sizeof(float));
-	cudaMemset(dimg, 0, nb_img_pixels_img);
-
-	float* dluminance_matrix;
-	cudaMalloc((void**)(&dluminance_matrix), nb_img_pixels_dmd * sizeof(float));
-	cudaMemcpy(dluminance_matrix, luminance_matrix, nb_img_pixels_dmd * sizeof(float), cudaMemcpyHostToDevice);
-
-	unsigned char* dluminance_correction;
-	cudaMalloc((void**)(&dluminance_correction), nb_img_pixels_dmd * sizeof(unsigned char));
-	cudaMemcpy(dluminance_correction, luminance_correction, nb_img_pixels_dmd * sizeof(signed char), cudaMemcpyHostToDevice);
-
-	Params hparam;
-	hparam.image = dimg;
-	hparam.image_width = sp.img_width;
-	hparam.image_height = sp.img_height;
-	hparam.total_pixels = nb_img_pixels_img;
-	hparam.cam_position = float3{ 0.0f, -2176.0f, 10.0f };
-
-	hparam.luminance_matrix = dluminance_matrix;
-	hparam.luminance_correction = dluminance_correction;
-	hparam.handle = gas_handle;
-
-	cudaMalloc((void**)&hparam.polarity, tris.nb_triangles * sizeof(unsigned char));
-	cudaMemcpy(hparam.polarity, tris.p, tris.nb_triangles * sizeof(unsigned char), cudaMemcpyHostToDevice);
-
-	CUdeviceptr d_param;
-	cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params));
-
-	// launch
-	float2 dmd_vector;
-	dmd_vector.x = 1.0f / 2176.0f; // quand le dmd avance d'un pixel en y il avance d'1/2176 en x
-	dmd_vector.y = 1.0f + 1.0f / 2176.0f;
-
-	int nb_step = sp.img_height + sp.dmd_height;
-
-	for (int i = 0; i < nb_step; i++)
-	{
-		cudaMemcpy(reinterpret_cast<void*>(d_param), &hparam, sizeof(hparam), cudaMemcpyHostToDevice);
-
-		optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, sp.dmd_width, sp.dmd_height, 1);
-		cudaDeviceSynchronize();
-
-		// move DMD
-		hparam.cam_position.x += dmd_vector.x;
-		hparam.cam_position.y += dmd_vector.y;
-	}
-
-	float* himg = new float[nb_img_pixels_img];
-	cudaMemcpy(himg, dimg, nb_img_pixels_img * sizeof(float), cudaMemcpyDeviceToHost);
-
-	// convert from float image to unsigned char
-	unsigned char* uc_img = new unsigned char[nb_img_pixels_img];
-
-	// find max value to normalize
-	float max_value = 0;
-
-	for (int i = 0; i < nb_img_pixels_img; i++)
-		if (himg[i] > max_value)
-			max_value = himg[i];
-	
-	for (int i = 0; i < nb_img_pixels_img; i++)
-		uc_img[i] = (himg[i] / max_value) * 255.0f;
-
-	saveToBmp("C:/Users/PC/Desktop/poc/DirectImagingSimulation.bmp",
-		sp.img_width, sp.img_height, uc_img);
-
-	delete[] uc_img;
-	delete[] himg;
-	cudaFree(dimg);
-	cudaFree(dluminance_matrix);
-	cudaFree(dluminance_correction);
-	cudaFree(&d_param);
-	cudaStreamDestroy(stream);
+	optixLaunch(pipeline, stream, dparam, sizeof(Params), &sbt, dmd_width, dmd_height, 1);
+	cudaDeviceSynchronize();
 }

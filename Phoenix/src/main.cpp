@@ -21,12 +21,12 @@ int main()
 
 	//optixDemo();
 
-	//DirectImagingSimulator dis;
-	//dis.SimulateLithography();
+	DirectImagingSimulator dis;
+	dis.SimulateLithography();
 
-	CalibrationImageGenerator::GenerateFocusImage(17, 9, 4096, 2176, 10);
+	/*CalibrationImageGenerator::GenerateFocusImage(17, 9, 4096, 2176, 10);
 	CalibrationImageGenerator::GenerateDistorsionImage(17, 9, 4096, 2176);
-	CalibrationImageGenerator::GenerateCameraAngleImage(4024, 3036 ,4096, 2176);
+	CalibrationImageGenerator::GenerateCameraAngleImage(4024, 3036 ,4096, 2176);*/
 
 	//warpingDemo1();
 	//warpingDemo2();

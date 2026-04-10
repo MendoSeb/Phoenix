@@ -70,9 +70,10 @@ struct HitGroupData
 struct Params
 {   
     float* image;
-    unsigned int           image_width;
-    unsigned int           image_height;
-    unsigned int           total_pixels;
+    unsigned int           dmd_width;
+    unsigned int           dmd_height;
+    unsigned int           img_width;
+    unsigned int           img_height;
 
     unsigned char* polarity;
     float2* distorsion;
@@ -248,6 +249,8 @@ public:
     /* Rendu de l'image */
     void render(TrisUtils::Triangulation& tris);
 
+    OptixTraversableHandle GetGasHandle();
+
     template <size_t nb_samples_x, size_t nb_samples_y>
     float2** CreateDistorsionSamples();
 
@@ -256,9 +259,10 @@ public:
     /* Sauvegarde l'image en .bmp */
     void saveToBmp(const std::string& filename, int width, int height, unsigned char* hostData);
 
-    void DISimulation(
-        SimulationParams& p, 
-        TrisUtils::Triangulation& tris, 
-        float* luminance_matrix,
-        unsigned char* luminance_correction);
+    void RayCasting(
+        int dmd_width,
+        int dmd_height,
+        CUstream& stream,
+        CUdeviceptr& dparam
+    );
 };
