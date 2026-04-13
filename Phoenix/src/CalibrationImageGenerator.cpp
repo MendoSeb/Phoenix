@@ -23,7 +23,6 @@ bool CalibrationImageGenerator::IsPointInTriangle(const float2& pixel, float2(&t
 
 
 void CalibrationImageGenerator::GenerateFocusImage(
-	int nb_marker_x,
 	int nb_marker_y,
 	int img_width,
 	int img_height,
@@ -31,17 +30,18 @@ void CalibrationImageGenerator::GenerateFocusImage(
 )
 {
 	int spacing = 10;
-	int marker_diameter = std::floor((img_height - nb_marker_y * spacing) / nb_marker_y) - 10;
+	int marker_diameter = std::floor((img_height - nb_marker_y * spacing) / nb_marker_y);
+	float marker_radius = marker_diameter / 2.0f;
+
+	int nb_marker_x = img_width / (marker_diameter + spacing);
 
 	int pixels_left_height = img_height - (nb_marker_y * marker_diameter);
 	int pixels_left_width = img_width - (nb_marker_x * marker_diameter);
 	int spacing_x = pixels_left_width / nb_marker_x;
 	int spacing_y = pixels_left_height / nb_marker_y;
 
-
 	// create the siemens star
-	unsigned char* marker = new unsigned char[marker_diameter * marker_diameter](0);
-	float marker_radius = marker_diameter / 2.0f;
+	unsigned char* marker = new unsigned char[marker_diameter * marker_diameter]();
 	float step_angle = 2.0 * M_PI / (nb_star_branch * 2.0);
 	int nb_pixels_outer_branch = std::ceil(2.0 * M_PI * marker_radius) / (nb_star_branch * 2.0f);
 	float2 center{ (float)marker_diameter / 2.0f, (float)marker_diameter / 2.0f };
@@ -196,38 +196,43 @@ unsigned char* CalibrationImageGenerator::GenerateDistorsionMarker(
 }
 
 void CalibrationImageGenerator::GenerateDistorsionImage(
-	int nb_marker_x,
 	int nb_marker_y,
 	int img_width,
 	int img_height
 )
 {
 	int spacing = 10;
-	int marker_diameter = std::floor((img_height - nb_marker_y * spacing) / nb_marker_y) - 10;
+	int marker_diameter = std::floor((img_height - (nb_marker_y - 1) * spacing) / (nb_marker_y - 1));
+	int marker_radius = (float)marker_diameter / 2.0f;
 
-	int pixels_left_height = img_height - (nb_marker_y * marker_diameter);
-	int pixels_left_width = img_width - (nb_marker_x * marker_diameter);
-	int spacing_x = pixels_left_width / nb_marker_x;
-	int spacing_y = pixels_left_height / nb_marker_y;
+	int nb_marker_x = std::floor(img_width / (marker_diameter + spacing));
 
-	unsigned char* img = new unsigned char[img_width * img_height](0);
+	int pixels_left_height = img_height - ((nb_marker_y - 1) * marker_diameter);
+	int pixels_left_width = img_width - ((nb_marker_x - 1) * marker_diameter);
+	int spacing_x = pixels_left_width / (nb_marker_x - 1);
+	int spacing_y = pixels_left_height / (nb_marker_y - 1);
+
+	unsigned char* img = new unsigned char[img_width * img_height]();
 	unsigned char* marker = GenerateDistorsionMarker(marker_diameter);
 
 	// place markers in the image
 	for (int x = 0; x < nb_marker_x; x++) {
 		for (int y = 0; y < nb_marker_y; y++)
 		{
-			int offset_x = x * (marker_diameter + spacing_x) + spacing_x / 2.0 + spacing / 2;
-			int offset_y = y * (marker_diameter + spacing_y) + spacing_y / 2.0 + spacing / 2;
+			int offset_x = x * (marker_diameter + spacing_x) - marker_radius;
+			int offset_y = y * (marker_diameter + spacing_y) - marker_radius;
 
 			for (int lx = 0; lx < marker_diameter; lx++) {
 				for (int ly = 0; ly < marker_diameter; ly++)
 				{
 					float2 pixel{ offset_x + lx, offset_y + ly };
+					int pixel_index_img = (int)pixel.y * img_width + (int)pixel.x;
+					int pixel_index_marker = ly * marker_diameter + lx;
 
-					if (pixel.x >= 0 && pixel.x < img_width && pixel.y >= 0 && pixel.y < img_height)
+					if (pixel.x >= 0 && pixel.x < img_width
+						&& pixel.y >= 0 && pixel.y < img_height)
 					{
-						img[(int)pixel.y * img_width + (int)pixel.x] = marker[ly * marker_diameter + lx];
+						img[pixel_index_img] = marker[pixel_index_marker];
 					}
 				}
 			}

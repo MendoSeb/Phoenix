@@ -245,9 +245,9 @@ TrisUtils::Triangulation TrisUtils::convertEarcutLayersToPointer(std::vector<ear
     /// allocation in RAM
     auto start = std::chrono::steady_clock::now();
 
-    t.v = new float2[t.nb_vertices * sizeof(float2)];
-    t.t = new uint3[t.nb_triangles * sizeof(uint3)];
-    t.p = new unsigned char[t.nb_triangles * sizeof(unsigned char)];
+    t.v = new float2[t.nb_vertices];
+    t.t = new uint3[t.nb_triangles];
+    t.p = new unsigned char[t.nb_triangles];
 
     auto end2 = std::chrono::steady_clock::now();
     std::cout << "! allocation ram en: " << std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start).count() << " ms" << std::endl;

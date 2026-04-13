@@ -17,7 +17,7 @@
 #include <GdstkUtils.h>
 
 
-Optix::Optix(int width, int height) : width(width), height(height)
+Optix::Optix()
 {
 	gas_handle = 0;
 	d_gas_output_buffer = 0;
@@ -157,7 +157,7 @@ int Optix::init()
 	pipeline_options.numPayloadValues = 1;
 	pipeline_options.numAttributeValues = 1;
 	pipeline_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
-	pipeline_options.pipelineLaunchParamsVariableName = "params";
+	pipeline_options.pipelineLaunchParamsVariableName = "dparam";
 	pipeline_options.usesPrimitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
 
 
@@ -371,65 +371,8 @@ CUdeviceptr Optix::initScene(TrisUtils::Triangulation& t)
 	return d_tris;
 }
 
-void Optix::render(TrisUtils::Triangulation& tris)
-{
-	CUstream stream;
-	cudaStreamCreate(&stream);
-
-	Params params;
-
-	float* output_buffer_d;
-	CUDA_CHECK(cudaMalloc((void**)(&output_buffer_d), width * height * sizeof(float)));
-	cudaMemset((void**)&output_buffer_d, 100, width * height);
-
-	params.image = output_buffer_d;
-	params.dmd_width = width;
-	params.dmd_height = height;
-
-	// triangles polarity
-	cudaMalloc((void**)&params.polarity, tris.nb_triangles * sizeof(unsigned char));
-	cudaMemcpy(params.polarity, tris.p, tris.nb_triangles * sizeof(unsigned char), cudaMemcpyHostToDevice);
-
-	// anti distorsion array
-	float2* distorsion = CreateDistorsionArray();
-
-	cudaMalloc((void**)&params.distorsion, width * height * sizeof(float2));
-	cudaMemcpy(params.distorsion, distorsion, width * height * sizeof(float2), cudaMemcpyHostToDevice);
-
-	params.handle = gas_handle;
-
-	//creation d'un rendu
-	CUdeviceptr d_param;
-	CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&d_param), sizeof(Params)));
-	CUDA_CHECK(cudaMemcpy(reinterpret_cast<void*>(d_param), &params, sizeof(params), cudaMemcpyHostToDevice));
-
-	int nbIter = 1;
-	auto start = std::chrono::high_resolution_clock::now();
-
-	for (int i = 0; i < nbIter; i++)
-		optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt, width, height, /*depth=*/1);
-
-	cudaDeviceSynchronize();
-
-	auto end = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<double, std::milli> duration_ms = (end - start);
-	std::cout << 1000.0f / (duration_ms.count() / nbIter) << " fps" << std::endl;
-
-	unsigned char* output_buffer_h = new unsigned char[width * height];
-	CUDA_CHECK(cudaMemcpy(output_buffer_h, output_buffer_d, width * height * sizeof(unsigned char), cudaMemcpyDeviceToHost));
-
-	saveToBmp("C:/Users/PC/Desktop/poc/ray_casting.bmp", width, height, output_buffer_h);
-
-	cudaFree(reinterpret_cast<void*>(d_param));
-	cudaFree(output_buffer_d);
-	cudaFree(params.polarity);
-	cudaFree(params.distorsion);
-	delete[] output_buffer_h;
-	delete[] distorsion;
-}
-
 template <size_t nb_samples_x, size_t nb_samples_y>
-float2** Optix::CreateDistorsionSamples()
+float2** Optix::CreateDistorsionSamples(int width, int height)
 {
 	float sample_size_w = (float)width / (nb_samples_x - 1);
 	float sample_size_h = (float)height / (nb_samples_y - 1);
@@ -470,7 +413,7 @@ float2** Optix::CreateDistorsionSamples()
 	return distorsion;
 }
 
-float2* Optix::CreateDistorsionArray()
+float2* Optix::CreateDistorsionArray(int width, int height)
 {
 	const int nb_samples_x = 21; // 2 vrais, 2 dupliqués en réalité
 	const int nb_samples_y = 11;
@@ -478,7 +421,7 @@ float2* Optix::CreateDistorsionArray()
 	float sample_size_w = (float)width / (nb_samples_x - 1);
 	float sample_size_h = (float)height / (nb_samples_y - 1);
 
-	float2** distorsion = CreateDistorsionSamples<nb_samples_x, nb_samples_y>();
+	float2** distorsion = CreateDistorsionSamples<nb_samples_x, nb_samples_y>(width, height);
 	float2* distorsion_i = new float2[width * height]; // for every pixel, interpolated
 
 	// interpolate distorsion for every pixel

@@ -9,7 +9,6 @@ namespace CalibrationImageGenerator
 
 
 	void GenerateFocusImage(
-		int nb_marker_x, 
 		int nb_marker_y, 
 		int img_width, 
 		int img_height, 
@@ -23,7 +22,6 @@ namespace CalibrationImageGenerator
 
 
 	void GenerateDistorsionImage(
-		int nb_marker_x,
 		int nb_marker_y,
 		int img_width,
 		int img_height

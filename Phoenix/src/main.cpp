@@ -24,9 +24,9 @@ int main()
 	DirectImagingSimulator dis;
 	dis.SimulateLithography();
 
-	/*CalibrationImageGenerator::GenerateFocusImage(17, 9, 4096, 2176, 10);
-	CalibrationImageGenerator::GenerateDistorsionImage(17, 9, 4096, 2176);
-	CalibrationImageGenerator::GenerateCameraAngleImage(4024, 3036 ,4096, 2176);*/
+	/*CalibrationImageGenerator::GenerateFocusImage(11, 4096, 2176, 10);
+	CalibrationImageGenerator::GenerateDistorsionImage(11, 4096, 2176);
+	CalibrationImageGenerator::GenerateCameraAngleImage(4024, 3036, 4096, 2176);*/
 
 	//warpingDemo1();
 	//warpingDemo2();
@@ -52,6 +52,6 @@ int main()
 	//ft.StringToPolygons("abcdefghijklmnopqrstuvwxyz\nABCDEFGHIJKLMNOPQRSTUVWXYZ\n1234567890\nun espace\n?!,;./()[]<>%^кЂ&аз'~-_+*");
 
 	//BMPToGDS();
-	
+
 	return 0;
 }

@@ -90,14 +90,14 @@ void Demo::optixDemo()
 
 	//TrisUtils::WriteObj("C:/Users/PC/Desktop/poc/temp.obj", t);
 
-	Optix o(scale, scale);
+	Optix o;
 	o.init();
 	o.loadShaders();
 
 	CUdeviceptr d_tris = o.initScene(t);
 	o.initPipeline(d_tris);
 
-	o.render(t);
+	//o.render(t);
 
 	cudaFree(t.v);
 	cudaFree(t.t);
@@ -383,7 +383,7 @@ void Demo::BMPToGDS()
 }
 
 void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
-{	
+{
 	auto start3 = std::chrono::steady_clock::now();
 
 	/// 1: triangulate every layers
@@ -442,8 +442,8 @@ void Demo::MultiLayerRasterization(float2 circuit_inch_size, int dpi)
 	//RasterizationStep::Warping(dtriangulation, src_dst_boxes);
 	unsigned char* img = RasterizationStep::Rasterization(dtriangulation, scale, img_dim);
 	RasterizationStep::SaveToBmp(
-		("C:/Users/PC/Desktop/poc/rasterization_" + std::to_string(dpi) + "dpi.bmp").c_str(), 
-		img_dim.x, img_dim.y, 
+		("C:/Users/PC/Desktop/poc/rasterization_" + std::to_string(dpi) + "dpi.bmp").c_str(),
+		img_dim.x, img_dim.y,
 		img);
 
 	/// 6: free vram memory
